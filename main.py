@@ -6,7 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime
-from colorama import Fore  # , Style
+from colorama import Fore  # , Style  # JUST MAKING SURE
 from twitchAPI.twitch import Twitch, TwitchUser
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.object.eventsub import ChannelBitsUseEvent, ChannelSubscribeEvent, ChannelSubscriptionGiftEvent, ChannelRaidEvent, ChannelChatNotificationEvent

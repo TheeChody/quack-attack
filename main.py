@@ -245,6 +245,7 @@ def update_auth_json(current_dict: dict) -> dict:
         _user_input = input("Enter In Client ID\n")
         if _user_input == "":
             print("Invalid Input, try again")
+            time.sleep(2)
         else:
             current_dict['bot_id'] = _user_input
             print(f"Setting '{current_dict['bot_id']}' as thee Client ID")
@@ -255,6 +256,7 @@ def update_auth_json(current_dict: dict) -> dict:
         _user_input = input("Enter In Secret ID\n")
         if _user_input == "":
             print("Invalid Input, try again")
+            time.sleep(2)
         else:
             current_dict['secret_id'] = _user_input
             print(f"Setting '{current_dict['secret_id']}' as thee Secret ID")

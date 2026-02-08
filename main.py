@@ -6,7 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime
-from colorama import Fore  # , Style  # JUST MAKING SURE
+from colorama import Fore  # , Style
 from twitchAPI.twitch import Twitch, TwitchUser
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.object.eventsub import ChannelBitsUseEvent, ChannelSubscribeEvent, ChannelSubscriptionGiftEvent, ChannelRaidEvent, ChannelChatNotificationEvent
@@ -354,10 +354,20 @@ async def run():
 
     await asyncio.sleep(.25)
     while True:
-        user_input = input("Enter 0 To Exit\n")
-        if user_input.isdigit():
-            user_input = int(user_input)
-            if user_input == 0:
+        try:
+            user_input = input("Enter 0 To Exit\n")
+            if user_input.isdigit():
+                user_input = int(user_input)
+                if user_input == 0:
+                    await shutdown()
+                    break
+        except Exception as e:
+            logger.error(f"{fortime()}: Error in main loop -- {e}")
+            try:
+                continue
+            except Exception as ee:
+                logger.error(f"{fortime()}: Error continuing from last error -- {ee}")
+                await asyncio.sleep(2)
                 await shutdown()
                 break
 

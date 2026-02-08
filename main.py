@@ -269,14 +269,14 @@ def update_auth_json(current_dict: dict) -> dict:
 # ----------------- MAIN_BOT_FUNCTIONS ----------------- #
 async def on_stream_bitties(data: ChannelBitsUseEvent):
     try:
-        logger_sim.info(f"!hyp {data.event.user_name} cheering with {data.event.bits} bitties!!")
+        logger_sim.info(f"{fortime()}: on_stream_bitties: !hyp {data.event.user_name} cheering with {data.event.bits} bitties!!")
     except Exception as e:
         logger.error(f"{fortime()}: Error in 'on_stream_bitties' -- {e}")
         return
 
 
 async def on_message(msg: ChatMessage):
-    logger_chat.info(f"{fortime()}: {msg.user.id}|{msg.user.display_name}; {msg.text}")
+    logger_chat.info(f"{fortime()}: on_message: {msg.user.id}|{msg.user.display_name}; {msg.text}")
 
 
 async def on_ready(event: EventData):
@@ -290,43 +290,43 @@ async def on_ready(event: EventData):
 async def on_stream_subbie(data: ChannelSubscribeEvent):
     try:
         if not data.event.is_gift:
-            logger_sim.info(f"{fortime()}: !hyp {data.event.user_name} with a {subbie_tier_check(data.event.tier)} subscription")
+            logger_sim.info(f"{fortime()}: on_stream_subbie: !hyp {data.event.user_name} with a {subbie_tier_check(data.event.tier)} subscription")
     except Exception as e:
         logger.error(f"{fortime()}: Error in 'on_stream_subbie' | {e}\n{data.event}")
 
 
 async def on_stream_subbie_gift(data: ChannelSubscriptionGiftEvent):
     try:
-        logger_sim.info(f"{fortime()}: !hyp {data.event.user_name} for the {data.event.total} gifted subbie{'s' if data.event.total < 1 else ''}!! A new total of {data.event.cumulative_total}")
+        logger_sim.info(f"{fortime()}: on_stream_subbie_gift; !hyp {data.event.user_name} for the {data.event.total} gifted subbie{'s' if data.event.total < 1 else ''}!! A new total of {data.event.cumulative_total}")
     except Exception as e:
         logger.error(f"{fortime()}: Error in 'on_stream_subbie_gift' | {e}\n{data.event}")
 
 
 async def on_stream_raid_in(data: ChannelRaidEvent):
     try:
-        logger_sim.info(f"{fortime()}: Welcome in {data.event.from_broadcaster_user_name}'s {data.event.viewers} Raiders!!!")
+        logger_sim.info(f"{fortime()}: on_stream_raid_in: Welcome in {data.event.from_broadcaster_user_name}'s {data.event.viewers} Raiders!!!")
     except Exception as e:
         logger.error(f"{fortime()}: Error in 'on_stream_raid_in' | {e}\n{data.event}")
 
 
 async def on_stream_raid_out(data: ChannelRaidEvent):
     try:
-        logger_sim.info(f"{fortime()}: {data.event.from_broadcaster_user_name} has raided out with {data.event.viewers} to https://twitch.tv/{data.event.to_broadcaster_user_name}")
+        logger_sim.info(f"{fortime()}: on_stream_raid_out: {data.event.from_broadcaster_user_name} has raided out with {data.event.viewers} to https://twitch.tv/{data.event.to_broadcaster_user_name}")
     except Exception as e:
         logger.error(f"{fortime()}: Error in 'on_stream_raid_out' | {e}\n{data.event}")
 
 
 async def on_stream_chat_notification(data: ChannelChatNotificationEvent):
     try:
-        logger_test.info(f"{fortime()}: {data.event}")
+        logger_test.info(f"{fortime()}: on_stream_chat_notification: {data.event}")
     except Exception as e:
         logger.error(f"{fortime()}: Error in 'on_stream_chat_notification' | {e}\n{data.event}")
 
 
-async def test_command(cmd: ChatCommand):
-    await cmd.reply(f"{cmd.user.display_name} I am responding to you!")
-    if cmd.parameter == "param":
-        await cmd.reply("Paramater detected")
+# async def test_command(cmd: ChatCommand):
+#     await cmd.reply(f"{cmd.user.display_name} I am responding to you!")
+#     if cmd.parameter == "param":
+#         await cmd.reply("Paramater detected")
 
 
 # ----------------- MAIN_BOT_LOOP ----------------- #
@@ -342,7 +342,7 @@ async def run():
     chat = await Chat(bot)
     chat.register_event(ChatEvent.READY, on_ready)
     chat.register_event(ChatEvent.MESSAGE, on_message)
-    chat.register_command("test", test_command)
+    # chat.register_command("test", test_command)
     chat.start()
 
     event_sub = EventSubWebsocket(bot)
@@ -361,7 +361,6 @@ async def run():
             if user_input.isdigit():
                 user_input = int(user_input)
                 if user_input == 0:
-                    await shutdown()
                     break
         except Exception as e:
             logger.error(f"{fortime()}: Error in main loop -- {e}")
@@ -370,8 +369,8 @@ async def run():
             except Exception as ee:
                 logger.error(f"{fortime()}: Error continuing from last error -- {ee}")
                 await asyncio.sleep(2)
-                await shutdown()
                 break
+    await shutdown()
 
 
 if __name__ == "__main__":

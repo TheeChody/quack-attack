@@ -12,7 +12,7 @@ from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.object.eventsub import ChannelBitsUseEvent, ChannelSubscribeEvent, ChannelSubscriptionGiftEvent, ChannelRaidEvent, ChannelChatNotificationEvent
 from twitchAPI.eventsub.websocket import EventSubWebsocket
 from twitchAPI.oauth import UserAuthenticationStorageHelper
-from twitchAPI.chat import Chat, EventData, ChatMessage, ChatCommand
+from twitchAPI.chat import Chat, EventData, ChatMessage  # , ChatCommand
 
 if getattr(sys, 'frozen', False):
     folder_name = "DuckStuff"

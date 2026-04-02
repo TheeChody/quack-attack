@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Executables
 
 on:
   push:
@@ -7,7 +7,17 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            output_name: QuackAttack.exe
+          - os: ubuntu-latest
+            output_name: QuackAttack
+          - os: macos-latest
+            output_name: QuackAttack
     
     steps:
     - uses: actions/checkout@v3
@@ -23,11 +33,11 @@ jobs:
         pip install pyinstaller
         pip install -r requirements.txt
     
-    - name: Build EXE
+    - name: Build executable
       run: pyinstaller --onefile main.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: windows-exe
-        path: dist/QuackAttack.exe
+        name: ${{ matrix.os }}-build
+        path: dist/${{ matrix.output_name }}

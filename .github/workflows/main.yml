@@ -13,11 +13,7 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
         include:
           - os: windows-latest
-            output_name: QuackAttack.exe
           - os: ubuntu-latest
-            output_name: QuackAttack
-          # - os: macos-latest
-          #  output_name: QuackAttack
     
     steps:
     - uses: actions/checkout@v3
@@ -34,7 +30,7 @@ jobs:
         pip install -r requirements.txt
     
     - name: Build executable
-      run: pyinstaller main.py --onedir --console --clean
+      run: pyinstaller --noconfirm --onedir --console --name "QuackAttack" --clean --log-level "WARN" main.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

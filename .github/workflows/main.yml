@@ -16,8 +16,8 @@ jobs:
             output_name: QuackAttack.exe
           - os: ubuntu-latest
             output_name: QuackAttack
-          - os: macos-latest
-            output_name: QuackAttack
+          # - os: macos-latest
+          #  output_name: QuackAttack
     
     steps:
     - uses: actions/checkout@v3
@@ -34,7 +34,7 @@ jobs:
         pip install -r requirements.txt
     
     - name: Build executable
-      run: pyinstaller main.py
+      run: pyinstaller main.py --onedir --console --clean
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

@@ -1,8 +1,6 @@
 name: Build Executables
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -10,14 +8,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-        include:
-          - os: windows-latest
-            output_name: QuackAttack.exe
-          - os: ubuntu-latest
-            output_name: QuackAttack
-          - os: macos-latest
-            output_name: QuackAttack
+        os: [windows-latest, ubuntu-latest] #, macos-latest]
     
     steps:
     - uses: actions/checkout@v3
@@ -34,10 +25,10 @@ jobs:
         pip install -r requirements.txt
     
     - name: Build executable
-      run: pyinstaller --onefile main.py
+      run: pyinstaller --noconfirm --onedir --console --name "QuackAttack" --clean --log-level "WARN" main.py
     
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }}-build
-        path: dist/${{ matrix.output_name }}
+        path: dist/

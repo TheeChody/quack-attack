@@ -1,4 +1,7 @@
+/.archived/
 /.idea/
+/.venv/
 /auth/
 /data/
 /logs/
+/output/

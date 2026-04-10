@@ -60,9 +60,11 @@ BOT_NAMES = (
     "nightbot",
     "pokemoncommunitygame",
     "sery_bot",
+    "soundalerts",
     "streamelements",
     "streamlabs",
     "streamlootsbot",
+    "streamstickers",
     "tangiabot",
     "wizebot"
 )

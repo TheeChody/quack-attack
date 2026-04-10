@@ -1,5 +1,3 @@
-# ToDo ----------------------------------------------------------------------- #
-#  Empty
 from __future__ import annotations
 import os
 import sys
@@ -16,7 +14,7 @@ from typing import Literal, overload
 from twitchAPI.object.api import TwitchUser
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.oauth import UserAuthenticationStorageHelper
-from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, NoticeEvent, WhisperEvent, JoinEvent, LeftEvent   # , ChatCommand
+from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, NoticeEvent, WhisperEvent, JoinEvent, LeftEvent
 
 
 def get_data_path() -> Path:
@@ -57,6 +55,7 @@ for path in DIRECTORIES.values():
 AUTH_JSON = DIRECTORIES['auth'] / "auth_info.json"
 TWITCH_TOKEN = DIRECTORIES['auth'] / "twitch_token.json"
 BOT_NAMES = (
+    "creatisbot",
     "fossabot",
     "moobot",
     "nightbot",
@@ -86,6 +85,7 @@ BLANK_STREAM_DATA = {
         },
         "viewers": {
             "avg": 0,
+            "current": 0,
             "max": 0,
             "min": 0
         }
@@ -127,9 +127,10 @@ class BotSetup(Twitch):
         self.target_room = [
             # "theravenarmed"
             # "theechody"
-            "xboxbaldmara"
+            # "xboxbaldmara"
             # "piousduck83"
             # "rocker_joe"
+            "sissythatgame"
         ]
         self.target_scopes = [
             AuthScope.CHANNEL_BOT,
@@ -177,6 +178,10 @@ class ListOptions:
 
 # ----------------- OVERLOADS ----------------- #
 @overload
+async def get_auth_user_id() -> TwitchUser: ...
+@overload
+async def get_auth_user_id() -> TwitchUser: ...
+@overload
 def read_file(file_name: Path | str, return_type: type[bool]) -> bool | str: ...
 @overload
 def read_file(file_name: Path | str, return_type: type[dict] | DictOptions) -> dict: ...
@@ -188,10 +193,6 @@ def read_file(file_name: Path | str, return_type: type[int]) -> int: ...
 def read_file(file_name: Path | str, return_type: type[list] | ListOptions) -> list: ...
 @overload
 def read_file(file_name: Path | str, return_type: type[str]) -> str: ...
-@overload
-async def get_auth_user_id() -> TwitchUser: ...
-@overload
-async def get_auth_user_id() -> TwitchUser: ...
 
 
 # ----------------- BOT FUNCTIONS ----------------- #
@@ -199,7 +200,6 @@ async def auth_bot() -> None:
     twitch_helper = UserAuthenticationStorageHelper(bot, bot.target_scopes, TWITCH_TOKEN)
     await twitch_helper.bind()
     logger.info(f"{fortime()}: Bot Authenticated Successfully!\n{bot.long_dashes()}")
-
 
 
 def check_db_auth() -> dict | None:
@@ -225,7 +225,6 @@ def create_new_data_stream() -> dict:
 
 def clear() -> None:
     subprocess.run(['cls' if os.name == 'nt' else 'clear'], shell=(os.name == 'nt'))
-
 
 
 def fetch_data_stream(_data_stream_timestamp: float) -> tuple[dict, float]:
@@ -447,6 +446,7 @@ def viewers_fetch_current() -> int:
 
 def viewers_update(_data: dict) -> dict:
     viewers_current = viewers_fetch_current()
+    _data['data']['viewers']['current'] = viewers_current
     if datetime.now().timestamp() - datetime.strptime(_data['info']['time']['started'], FORMAT_TIME).timestamp() < 900:
         _data['data']['viewers']['min'] = viewers_current if viewers_current > _data['data']['viewers']['min'] else _data['data']['viewers']['min']
     else:
@@ -511,7 +511,7 @@ async def on_raid(event: dict) -> None:
         raiders_number = int(raiders_number)
         data_stream['data']['raids']['total'] += 1
         data_stream['data']['raids']['viewers'] += raiders_number
-        logger_sim.info(f"{EMOTES['raid']['rave']} {EMOTES['hype']['parrot']} {EMOTES['hype']['skelly']} {EMOTES['flag']['roll']} WELCOME TO THE CREW {raiders_number:,} RAIDERS OF {raider_channel} {EMOTES['flag']['roll']} {EMOTES['hype']['skelly']} {EMOTES['hype']['parrot']} {EMOTES['raid']['rave']}")
+        logger_sim.info(f"{EMOTES['raid']['rave']} {EMOTES['hype']['parrot']} {EMOTES['hype']['skelly']} {EMOTES['flag']['roll']} WELCOME TO THE CREW {raiders_number:,} RAIDER{"S" if raiders_number > 1 else ""} OF {raider_channel} {EMOTES['flag']['roll']} {EMOTES['hype']['skelly']} {EMOTES['hype']['parrot']} {EMOTES['raid']['rave']}")
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_raid' - {_error}")
         return
@@ -634,7 +634,7 @@ async def run() -> None:
                     "subbies_resub": f"{data_stream['data']['subbies']['resub']:,}",
                     "subbies_total": f"{total_subbies():,}",
                     "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
-                    "viewers": f"{viewers_fetch_current():,}",
+                    "viewers": f"{data_stream['data']['viewers']['current']:,}",
                     "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
                     "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
                 }

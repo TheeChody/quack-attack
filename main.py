@@ -54,12 +54,18 @@ for path in DIRECTORIES.values():
 
 AUTH_JSON = DIRECTORIES['auth'] / "auth_info.json"
 TWITCH_TOKEN = DIRECTORIES['auth'] / "twitch_token.json"
-BOT_NAMES = [
+BOT_NAMES = (
+    "fossabot",
+    "moobot",
+    "nightbot",
     "pokemoncommunitygame",
-    "streamelements",
     "sery_bot",
-    "tangiabot"
-]
+    "streamelements",
+    "streamlabs",
+    "streamlootsbot",
+    "tangiabot",
+    "wizebot"
+)
 BLANK_STREAM_DATA = {
     "data": {
         "bits": 0,
@@ -69,9 +75,11 @@ BLANK_STREAM_DATA = {
             "total": 0,
             "viewers": 0
         },
-        "subbies_gifted": 0,
-        "subbies_new": 0,
-        "subbies_renewed": 0,
+        "subbies": {
+            "gifted": 0,
+            "new": 0,
+            "resub": 0
+        },
         "viewers": {
             "avg": 0,
             "max": 0,
@@ -113,9 +121,9 @@ class BotSetup(Twitch):
         super().__init__(app_id, app_secret)
         self.bot = Twitch
         self.target_room = [
-            "theravenarmed"
+            # "theravenarmed"
             # "theechody"
-            # "xboxbaldmara"
+            "xboxbaldmara"
             # "piousduck83"
             # "rocker_joe"
         ]
@@ -399,7 +407,7 @@ def subbie_tier_check(raw_tier: str) -> str:
 
 
 def total_subbies() -> int:
-    return data_stream['data']['subbies_gifted'] + data_stream['data']['subbies_new'] + data_stream['data']['subbies_renewed']
+    return data_stream['data']['subbies']['gifted'] + data_stream['data']['subbies']['new'] + data_stream['data']['subbies']['resub']
 
 
 def update_auth_json(current_dict: dict) -> dict:
@@ -446,18 +454,19 @@ def viewers_update(_data: dict) -> dict:
 # ----------------- MAIN_BOT_FUNCTIONS ----------------- #
 async def on_message(msg: ChatMessage) -> None:
     try:
-        if msg.user.name == bot.target_room[0] or msg.user.name in BOT_NAMES:
+        if msg.user.name in BOT_NAMES:
             return
-        _time = fortime()
-        data_stream['data']['chat_msg_count'] += 1
-        logger_chat.info(f"{_time}: {msg.user.id}|{msg.user.display_name}; {msg.text}")
-        logger_test.info(f"{_time}: text; {msg.text}\nhype chat; {msg.hype_chat}\nbits; {msg.bits}\nemotes; {msg.emotes}\nfirst; {msg.first}\nis_me; {msg.is_me}")
-        if msg.bits > 0:
-            data_stream['data']['bits'] += msg.bits
-            logger_sim.info(f"{HYPE} {msg.user.display_name} for cheering {msg.bits:,} bits!!")
-        elif msg.first:
-            data_stream['data']['chatters_new'] += 1
-            logger_sim.info(f"Welcome aboard {msg.user.display_name}")
+        if msg.user.name != bot.target_room[0]:
+            _time = fortime()
+            data_stream['data']['chat_msg_count'] += 1
+            logger_chat.info(f"{_time}: {msg.user.id}|{msg.user.display_name}; {msg.text}")
+            logger_test.info(f"{_time}: text; {msg.text}\nhype chat; {msg.hype_chat}\nbits; {msg.bits}\nemotes; {msg.emotes}\nfirst; {msg.first}\nis_me; {msg.is_me}")
+            if msg.bits > 0:
+                data_stream['data']['bits'] += msg.bits
+                logger_sim.info(f"{HYPE} {msg.user.display_name} for cheering {msg.bits:,} bits!!")
+            elif msg.first:
+                data_stream['data']['chatters_new'] += 1
+                logger_sim.info(f"Welcome aboard {msg.user.display_name}")
         elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
@@ -469,7 +478,7 @@ async def on_message(msg: ChatMessage) -> None:
             else:
                 logger.error(f"{fortime()}: Error in 'on_message/elif msg.user.name == bot.target_room[0]/number_subs can't be figured' -- {number_subs}")
                 number_subs = 0
-            data_stream['data']['subbies_gifted'] += number_subs
+            data_stream['data']['subbies']['gifted'] += number_subs
             logger_sim.info(f"{HYPE} {username} for the {number_subs:,} GIFT SUB{"S" if number_subs > 1 else ""}!")
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_message' - {_error}")
@@ -521,11 +530,11 @@ async def on_sub(sub: ChatSub) -> None:
         logger_sub.info(f"{_time}: {type(sub)}\n{sub}\n")
         logger_sub.info(f"{_time}: sub plan; {sub.sub_plan}\nsub plan name; {sub.sub_plan_name}\nsub type; {sub.sub_type}\nsub msg; {sub.sub_message}\nsys msg; {sub.system_message}")
         if sub.sub_type == "sub":
-            data_stream['data']['subbies_new'] += 1
+            data_stream['data']['subbies']['new'] += 1
             logger_sim.info(f"{HYPE} {sub.system_message.split('\\')[0]} for the BRAND NEW {subbie_tier_check(sub.sub_plan).capitalize()} SUB!!")
         if sub.sub_type == "resub":
             try:
-                data_stream['data']['subbies_renewed'] += 1
+                data_stream['data']['subbies']['resub'] += 1
                 # sub_plan_name = sub.sub_plan_name
                 # sub_msg = sub.sub_message.split("\\", maxsplit=9)
                 sys_msg = sub.system_message.split("\\", maxsplit=16)
@@ -614,9 +623,9 @@ async def run() -> None:
                     "bits": f"{data_stream['data']['bits']:,}",
                     "chat_msg_count": f"{data_stream['data']['chat_msg_count']:,}",
                     "chat_new_viewer": f"{data_stream['data']['chatters_new']:,}",
-                    "subbies_gifted": f"{data_stream['data']['subbies_gifted']:,}",
-                    "subbies_new": f"{data_stream['data']['subbies_new']:,}",
-                    "subbies_renewed": f"{data_stream['data']['subbies_renewed']:,}",
+                    "subbies_gifted": f"{data_stream['data']['subbies']['gifted']:,}",
+                    "subbies_new": f"{data_stream['data']['subbies']['new']:,}",
+                    "subbies_resub": f"{data_stream['data']['subbies']['resub']:,}",
                     "subbies_total": f"{total_subbies():,}",
                     "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
                     "viewers": f"{viewers_fetch_current():,}",

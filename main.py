@@ -72,9 +72,11 @@ BLANK_STREAM_DATA = {
         "subbies_gifted": 0,
         "subbies_new": 0,
         "subbies_renewed": 0,
-        "viewers_avg": 0,
-        "viewers_max": 0,
-        "viewers_min": 0
+        "viewers": {
+            "avg": 0,
+            "max": 0,
+            "min": 0
+        }
     },
     "info": {
         "streamer": None,
@@ -236,10 +238,6 @@ def fetch_data_stream(_data_stream_timestamp: float) -> tuple[dict, float]:
     return create_new_data_stream(), _data_stream_timestamp
 
 
-def fetch_users() -> str:
-    return f"{len(users_in_chat[bot.target_room[0]]):,}"
-
-
 def fortime() -> str:
     return datetime.now().strftime('%y-%m-%d %H:%M:%S')
 
@@ -346,6 +344,7 @@ def read_file(file_name: Path | str,
 
 
 def save_data_stream(_data: dict, file_save: str) -> None:
+    _data = viewers_update(_data)
     _data['info']['time']['ended'] = datetime.strftime(datetime.now(), FORMAT_TIME)
     save_json(_data, DIRECTORIES['stream'] / file_save)
 
@@ -389,7 +388,9 @@ def setup_logger(name: str, log_file: str, _log_list: list, level=logging.INFO) 
 
 
 def subbie_tier_check(raw_tier: str) -> str:
-    if raw_tier == "1000":
+    if raw_tier == "Prime":
+        return "Prime"
+    elif raw_tier == "1000":
         return "Tier 1"
     elif raw_tier == "2000":
         return "Tier 2"
@@ -428,20 +429,35 @@ def update_auth_json(current_dict: dict) -> dict:
     return current_dict
 
 
+def viewers_fetch_current() -> int:
+    return len(users_in_chat[bot.target_room[0]])
+
+
+def viewers_update(_data: dict) -> dict:
+    viewers_current = viewers_fetch_current()
+    if datetime.now().timestamp() - datetime.strptime(_data['info']['time']['started'], FORMAT_TIME).timestamp() < 900:
+        _data['data']['viewers']['min'] = viewers_current if viewers_current > _data['data']['viewers']['min'] else _data['data']['viewers']['min']
+    else:
+        _data['data']['viewers']['min'] = _data['data']['viewers']['min'] if _data['data']['viewers']['min'] < viewers_current else viewers_current
+    _data['data']['viewers']['max'] = _data['data']['viewers']['max'] if _data['data']['viewers']['max'] > viewers_current else viewers_current
+    return _data
+
+
 # ----------------- MAIN_BOT_FUNCTIONS ----------------- #
 async def on_message(msg: ChatMessage) -> None:
     try:
-        if msg.user.name != bot.target_room[0] and msg.user.name not in BOT_NAMES:
-            data_stream['data']['chat_msg_count'] += 1
-        time_ = fortime()
-        logger_chat.info(f"{time_}: {msg.user.id}|{msg.user.display_name}; {msg.text}")
-        logger_test.info(f"{time_}: text; {msg.text}\nhype chat; {msg.hype_chat}\nbits; {msg.bits}\nemotes; {msg.emotes}\nfirst; {msg.first}\nis_me; {msg.is_me}")
+        if msg.user.name == bot.target_room[0] or msg.user.name in BOT_NAMES:
+            return
+        _time = fortime()
+        data_stream['data']['chat_msg_count'] += 1
+        logger_chat.info(f"{_time}: {msg.user.id}|{msg.user.display_name}; {msg.text}")
+        logger_test.info(f"{_time}: text; {msg.text}\nhype chat; {msg.hype_chat}\nbits; {msg.bits}\nemotes; {msg.emotes}\nfirst; {msg.first}\nis_me; {msg.is_me}")
         if msg.bits > 0:
             data_stream['data']['bits'] += msg.bits
             logger_sim.info(f"{HYPE} {msg.user.display_name} for cheering {msg.bits:,} bits!!")
         elif msg.first:
             data_stream['data']['chatters_new'] += 1
-            logger_sim.info(f"Welcome aboard @{msg.user.display_name}")
+            logger_sim.info(f"Welcome aboard {msg.user.display_name}")
         elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
@@ -454,7 +470,7 @@ async def on_message(msg: ChatMessage) -> None:
                 logger.error(f"{fortime()}: Error in 'on_message/elif msg.user.name == bot.target_room[0]/number_subs can't be figured' -- {number_subs}")
                 number_subs = 0
             data_stream['data']['subbies_gifted'] += number_subs
-            logger_sim.info(f"{HYPE} {username} for the {number_subs:,} GIFT SUBS!")
+            logger_sim.info(f"{HYPE} {username} for the {number_subs:,} GIFT SUB{"S" if number_subs > 1 else ""}!")
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_message' - {_error}")
         return
@@ -462,7 +478,9 @@ async def on_message(msg: ChatMessage) -> None:
 
 async def on_notice(event: NoticeEvent) -> None:
     try:
-        logger_notice.info(f"{fortime()}: {type(event)}\nid; {event.msg_id}\nmessage; {event.message}\n")
+        _time = fortime()
+        logger_notice.info(f"{_time}: {type(event)}\nid; {event.msg_id}\nmessage; {event.message}\n")
+        logger.info(f"{_time}: NOTICE_EVENT")
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_notice' - {_error}")
         return
@@ -499,36 +517,28 @@ async def on_ready(event: EventData) -> None:
 
 async def on_sub(sub: ChatSub) -> None:
     try:
-        time_ = fortime()
-        logger_sub.info(f"{time_}: {type(sub)}\n{sub}\n")
-        logger_sub.info(f"{time_}: sub plan; {sub.sub_plan}\nsub plan name; {sub.sub_plan_name}\nsub type; {sub.sub_type}\nsub msg; {sub.sub_message}\nsys msg; {sub.system_message}")
-        try:
-            if sub.sub_type == "sub":
-                data_stream['data']['subbies_new'] += 1
-                logger.info(f"{time_}: NEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\n")
-                logger_sub.info(f"{time_}: NEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\n")
-        except Exception as _error:
-            logger.error(f"{fortime()}: Error in 'on_sub/sub' -- {_error}")
-            return
+        _time = fortime()
+        logger_sub.info(f"{_time}: {type(sub)}\n{sub}\n")
+        logger_sub.info(f"{_time}: sub plan; {sub.sub_plan}\nsub plan name; {sub.sub_plan_name}\nsub type; {sub.sub_type}\nsub msg; {sub.sub_message}\nsys msg; {sub.system_message}")
+        if sub.sub_type == "sub":
+            data_stream['data']['subbies_new'] += 1
+            logger_sim.info(f"{HYPE} {sub.system_message.split('\\')[0]} for the BRAND NEW {subbie_tier_check(sub.sub_plan).capitalize()} SUB!!")
         if sub.sub_type == "resub":
             try:
                 data_stream['data']['subbies_renewed'] += 1
-                sub_plan = sub.sub_plan
-                sub_msg = sub.sub_message.split("\\", maxsplit=9)
+                # sub_plan_name = sub.sub_plan_name
+                # sub_msg = sub.sub_message.split("\\", maxsplit=9)
                 sys_msg = sub.system_message.split("\\", maxsplit=16)
-                if sub_plan == "Prime":
-                    sub_tier = 1
-                else:
-                    sub_tier = sub_msg[4].lstrip("s").rstrip(".")
                 username = sys_msg[0]
-                logger_sub.info(f"{time_}: username; {username}\n sub_plan; {sub_plan}\nsub_msg; {sub_msg}\nsys_msg({len(sys_msg)}); {sys_msg}")
+                # logger_sub.info(f"{_time}: username; {username}\n sub_plan_name; {sub_plan_name}\nsub_msg; {sub_msg}\nsys_msg({len(sys_msg)}); {sys_msg}")
+                total_sub_time = int(sys_msg[8].lstrip("s"))
                 if len(sys_msg) > 10:
-                    total_sub_time = int(sys_msg[8].lstrip("s"))
+                    # total_sub_time = int(sys_msg[8].lstrip("s"))
                     streak_sub_time = int(sys_msg[13].lstrip("s"))
                 else:
-                    total_sub_time = int(sys_msg[8].lstrip("s"))
+                    # total_sub_time = int(sys_msg[8].lstrip("s"))
                     streak_sub_time = 0
-                logger_sim.info(f"{HYPE} @{username} for the T{sub_tier} RESUB!!{f" @{username} has been subbed for {total_sub_time:,} Months{f", currently on a {streak_sub_time} Streak!!" if streak_sub_time > 0 else "!!"}" if total_sub_time > 0 else ""}")
+                logger_sim.info(f"{HYPE} {username} for the {subbie_tier_check(sub.sub_plan)} RESUB!!{f" {username} has been subbed for {total_sub_time:,} Months{f", currently on a {streak_sub_time} Streak!!" if streak_sub_time > 0 else "!!"}" if total_sub_time > 0 else ""}")
             except Exception as _error:
                 logger.error(f"{fortime()}: ERROR 'on_sub/resub' - {_error}")
                 return
@@ -601,15 +611,17 @@ async def run() -> None:
         try:
             try:
                 stream_stats = {
-                    "viewers": fetch_users(),
+                    "bits": f"{data_stream['data']['bits']:,}",
                     "chat_msg_count": f"{data_stream['data']['chat_msg_count']:,}",
                     "chat_new_viewer": f"{data_stream['data']['chatters_new']:,}",
-                    "bits": f"{data_stream['data']['bits']:,}",
-                    "subbies_total": f"{total_subbies():,}",
                     "subbies_gifted": f"{data_stream['data']['subbies_gifted']:,}",
                     "subbies_new": f"{data_stream['data']['subbies_new']:,}",
                     "subbies_renewed": f"{data_stream['data']['subbies_renewed']:,}",
-                    "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}"
+                    "subbies_total": f"{total_subbies():,}",
+                    "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
+                    "viewers": f"{viewers_fetch_current():,}",
+                    "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
+                    "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
                 }
                 print_stream_stats(stream_stats)
             except Exception as _error:
@@ -617,7 +629,8 @@ async def run() -> None:
                 pass
             user_input = input(f"{bot.long_dashes()}\n"
                                f"Enter 1 To View Names of Users\n"
-                               f"Enter 0 To Exit\n")
+                               f"Enter 0 To Exit\n"
+                               f"Enter Nothing To Refresh\n")
             if user_input == "":
                 pass
             elif user_input.isdigit():
@@ -628,7 +641,7 @@ async def run() -> None:
                     clear()
                     for username in sorted(users_in_chat[bot.target_room[0]]):
                         print(username)
-                    print(f"{bot.long_dashes()}\nTotal; {fetch_users()}")
+                    print(f"{bot.long_dashes()}\nTotal; {viewers_fetch_current():,}")
                     input("Hit enter to continue...")
                 elif user_input == 69:
                     input("haha, funny sex number")

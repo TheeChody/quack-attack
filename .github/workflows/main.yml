@@ -26,7 +26,9 @@ jobs:
     
     - name: Build executable
       # run: pyinstaller --noconfirm --onedir --console --name "QuackAttack" --clean --log-level "WARN" main.py
-      run: pyinstaller --noconfirm --onefile --console --name "QuackAttack" --clean --log-level "WARN" main.py
+      # run: pyinstaller --noconfirm --onedir --console --icon "/icon/icon.ico" --name "QuackAttack" --clean --log-level "WARN" main.py
+      # run: pyinstaller --noconfirm --onefile --console --name "QuackAttack" --clean --log-level "WARN" main.py
+      run: pyinstaller --noconfirm --onefile --console --icon "/icon/icon.ico" --name "QuackAttack" --clean --log-level "WARN" main.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

@@ -1,3 +1,5 @@
+# ToDo ----------------------------------------------------------------------- #
+#  Empty
 from __future__ import annotations
 import os
 import sys
@@ -567,6 +569,7 @@ async def on_user_join(event: JoinEvent) -> None:
         elif chatter_name not in users_in_chat[streamer_name]:
             users_in_chat[streamer_name].append(chatter_name)
             logger_viewers.info(f"{fortime()}: {chatter_name} has joined the chat! {len(users_in_chat[streamer_name])} viewers present!")
+            viewers_update(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_join' - {_error}")
         return
@@ -581,6 +584,7 @@ async def on_user_left(event: LeftEvent) -> None:
         elif chatter_name in users_in_chat[streamer_name]:
             users_in_chat[streamer_name].remove(chatter_name)
             logger_viewers.info(f"{fortime()}: {event.user_name} has left the chat! {len(users_in_chat[streamer_name])} viewers present!")
+            viewers_update(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_left' - {_error}")
         return

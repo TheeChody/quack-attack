@@ -1,14 +1,16 @@
+from __future__ import annotations
 import os
 import sys
 import json
 import time
 import asyncio
 import logging
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from copy import deepcopy as copy
-# from copy import copy as copy
 from twitchAPI.twitch import Twitch
+from typing import Literal, overload
 from twitchAPI.object.api import TwitchUser
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.oauth import UserAuthenticationStorageHelper
@@ -53,6 +55,7 @@ for path in DIRECTORIES.values():
 AUTH_JSON = DIRECTORIES['auth'] / "auth_info.json"
 TWITCH_TOKEN = DIRECTORIES['auth'] / "twitch_token.json"
 BOT_NAMES = [
+    "pokemoncommunitygame",
     "streamelements",
     "sery_bot",
     "tangiabot"
@@ -82,19 +85,20 @@ BLANK_STREAM_DATA = {
 }
 }
 EMOTES = {
-            "flag": {
-                "roll": "therav27FlagRoll"
-            },
-            "hype": {
-                "parrot": "therav27ParrotHYPE",
-                "skelly": "therav27SKELLYDANCE"
-            },
-            "raid": {
-                "rave": "therav27RaidRave"
-            }
-        }
+    "flag": {
+        "roll": "therav27FlagRoll"
+    },
+    "hype": {
+        "parrot": "therav27ParrotHYPE",
+        "skelly": "therav27SKELLYDANCE"
+    },
+    "raid": {
+        "rave": "therav27RaidRave"
+    }
+}
 FORMAT_TIME = "%Y-%m-%d--%H-%M-%S"
 HYPE = "!hyp"
+SAVE_FILE_INIT = False
 
 log_list = []
 users_in_chat = {}
@@ -106,10 +110,12 @@ class BotSetup(Twitch):
     def __init__(self, app_id: str, app_secret: str):
         super().__init__(app_id, app_secret)
         self.bot = Twitch
-        self.target_rooms = [
+        self.target_room = [
             "theravenarmed"
             # "theechody"
             # "xboxbaldmara"
+            # "piousduck83"
+            # "rocker_joe"
         ]
         self.target_scopes = [
             AuthScope.CHANNEL_BOT,
@@ -132,11 +138,54 @@ class BotSetup(Twitch):
         return "-" * os.get_terminal_size().columns
 
 
+class DictOptions:
+    __slots__ = ("json",)
+
+    def __init__(self, json: bool = False):
+        self.json = json
+
+
+class ListOptions:
+    __slots__ = ("mode", "sep", "maxsplit", "cast_map")
+
+    def __init__(
+        self,
+        mode: Literal["split", "splitlines", "none"] = "none",
+        sep: str = "",
+        maxsplit: int = -1,
+        cast_map: bool = False,
+    ):
+        self.mode = mode
+        self.sep = sep
+        self.maxsplit = maxsplit
+        self.cast_map = cast_map
+
+
+# ----------------- OVERLOADS ----------------- #
+@overload
+def read_file(file_name: Path | str, return_type: type[bool]) -> bool | str: ...
+@overload
+def read_file(file_name: Path | str, return_type: type[dict] | DictOptions) -> dict: ...
+@overload
+def read_file(file_name: Path | str, return_type: type[float]) -> float: ...
+@overload
+def read_file(file_name: Path | str, return_type: type[int]) -> int: ...
+@overload
+def read_file(file_name: Path | str, return_type: type[list] | ListOptions) -> list: ...
+@overload
+def read_file(file_name: Path | str, return_type: type[str]) -> str: ...
+@overload
+async def get_auth_user_id() -> TwitchUser: ...
+@overload
+async def get_auth_user_id() -> TwitchUser: ...
+
+
 # ----------------- BOT FUNCTIONS ----------------- #
 async def auth_bot() -> None:
     twitch_helper = UserAuthenticationStorageHelper(bot, bot.target_scopes, TWITCH_TOKEN)
     await twitch_helper.bind()
     logger.info(f"{fortime()}: Bot Authenticated Successfully!\n{bot.long_dashes()}")
+
 
 
 def check_db_auth() -> dict | None:
@@ -149,7 +198,7 @@ def check_db_auth() -> dict | None:
 
     if not os.path.exists(AUTH_JSON):
         save_json(fetch_stock_auth(), AUTH_JSON)
-    _auth_dict = read_file(AUTH_JSON, {"json": True})
+    _auth_dict = read_file(AUTH_JSON, DictOptions(json=True))
     if None in (_auth_dict['bot_id'], _auth_dict['secret_id']):
         _auth_dict = update_auth_json(_auth_dict)
     return _auth_dict
@@ -160,8 +209,9 @@ def create_new_data_stream() -> dict:
     return _data_stream
 
 
-def cls() -> None:
-    os.system('cls' if os.name == 'nt' else 'clear')
+def clear() -> None:
+    subprocess.run(['cls' if os.name == 'nt' else 'clear'], shell=(os.name == 'nt'))
+
 
 
 def fetch_data_stream(_data_stream_timestamp: float) -> tuple[dict, float]:
@@ -173,13 +223,13 @@ def fetch_data_stream(_data_stream_timestamp: float) -> tuple[dict, float]:
                     date_form = datetime.strptime(filename.replace('.json', ''), FORMAT_TIME)
                     if date_form_current.timestamp() - date_form.timestamp() < (3600 * 6):
                         _data_stream_timestamp = date_form.timestamp()
-                        return read_file(DIRECTORIES['stream'] / filename, {"json": True}), _data_stream_timestamp
+                        _data_stream = read_file(DIRECTORIES['stream'] / filename, return_type=DictOptions(json=True))
+                        if _data_stream['info']['streamer'] == bot.target_room[0]:
+                            return _data_stream, _data_stream_timestamp
+                        else:
+                            move_file(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / filename)
                     else:
-                        try:
-                            os.rename(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / filename)
-                        except Exception as _error:
-                            logger.error(f"{fortime()}: Error in 'fetch_data_stream' -- Moving {filename} to archives -- {_error}")
-                            continue
+                        move_file(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / filename)
                 except Exception as _error:
                     logger.error(f"{fortime()}: ERROR in 'fetch_data_stream' -- {_error}")
                     return create_new_data_stream(), _data_stream_timestamp
@@ -187,26 +237,25 @@ def fetch_data_stream(_data_stream_timestamp: float) -> tuple[dict, float]:
 
 
 def fetch_users() -> str:
-    return f"{len(users_in_chat[bot.target_rooms[0]]):,}"
+    return f"{len(users_in_chat[bot.target_room[0]]):,}"
 
 
 def fortime() -> str:
     return datetime.now().strftime('%y-%m-%d %H:%M:%S')
 
 
-async def get_auth_user_id() -> None | TwitchUser:
+async def get_auth_user_id():
     user_info = bot.get_users()
     try:
         async for entry in user_info:
-            if type(entry) == TwitchUser:
-                _user = entry
-                return _user
+            if isinstance(entry, TwitchUser):
+                return entry
             else:
                 logger.error(f"{fortime()}: NO USER FOUND IN 'user_info'")
-                return None
+                exit()
     except Exception as _error:
         logger.error(f"{fortime()}: {_error}")
-        return None
+        exit()
 
 
 def get_max_length(keys: list) -> int:
@@ -217,6 +266,13 @@ def get_max_length(keys: list) -> int:
     return l
 
 
+def move_file(old_path: Path, new_path: Path) -> None:
+    try:
+        os.rename(old_path, new_path)
+    except Exception as _error:
+        logger.error(f"{fortime()}: Error in 'fetch_data_stream' -- Moving {old_path} to {new_path} -- {_error}")
+
+
 def print_max_length(_str: str, length: int) -> str:
     return f"{_str}{' ' * (length - len(_str))}"
 
@@ -225,57 +281,63 @@ def print_stream_stats(stream_stats: dict) -> None:
     length = get_max_length(list(stream_stats.keys()))
     sorted_stats = dict(sorted(stream_stats.items()))
     for key, value in sorted_stats.items():
-        print(f"{print_max_length(key.replace('_', ' ').title(), length)}: {value}")
+        print(f"{print_max_length(key.replace('_', ' ').replace('-', '/').title(), length)}: {value}")
 
 
-def read_file(file_name: Path | str, return_type: bool | dict | float | int | list | str) -> bool | dict | float | int | list | None | str:
-    def open_file(json_: bool = False):
+def read_file(file_name: Path | str,
+              return_type: type[bool | dict | float | int | list | str] | ListOptions | DictOptions
+              ) -> bool | dict | float | int | list | str | None:
+
+    def open_file(json_: bool = False) -> str | dict:
         with open(file_name, "r", encoding="utf-8") as file:
-            if json_:
-                return json.load(file)
-            else:
-                return file.read()
+            return json.load(file) if json_ else file.read()
 
     try:
-        if return_type == bool:
-            variable = open_file()
-            if variable == "True":
+        # --- bool ---
+        if return_type is bool:
+            raw = open_file()
+            if raw == "True":
                 return True
-            elif variable == "False":
+            elif raw == "False":
                 return False
+            return f"ValueError Converting {raw!r} to {return_type}"
+
+        # --- dict (with options) ---
+        if isinstance(return_type, DictOptions):
+            return open_file(return_type.json)  # type: ignore[return-value]
+        if return_type is dict:
+            return dict(open_file())  # type: ignore[call-overload]
+
+        # --- list (with options) ---
+        if isinstance(return_type, ListOptions):
+            raw = open_file()
+            assert isinstance(raw, str)
+            raw = open_file()
+            assert isinstance(raw, str)
+            if return_type.mode == "split":
+                parts = raw.split(return_type.sep, maxsplit=return_type.maxsplit)
+            elif return_type.mode == "splitlines":
+                parts = raw.splitlines()
             else:
-                return f"ValueError Converting {variable} to {return_type}"
-        elif type(return_type) == dict:
-            if return_type['json']:
-                return open_file(True)
-            else:
-                return dict(open_file())
-        elif return_type == dict:
-            return dict(open_file())
-        elif type(return_type) == list:
-            variable = open_file()
-            if return_type[1] == "split":
-                variable = variable.split(return_type[2], maxsplit=return_type[3])
-            elif return_type[1] == "splitlines":
-                variable = variable.splitlines()
-            if return_type[0] == map:
-                return list(map(str, variable))
-            else:
-                return list(variable)
-        elif return_type in (int, float):
-            variable = float(open_file())
-            if return_type == float:
-                return variable
-            return int(variable)
-        else:
-            return open_file()
+                parts = list(raw)
+            return list(map(str, parts)) if return_type.cast_map else parts
+        if return_type is list:
+            return list(open_file())
+
+        if return_type is int:
+            return int(float(open_file()))  # type: ignore[arg-type]
+        if return_type is float:
+            return float(open_file())       # type: ignore[arg-type]
+
+        return open_file()  # type: ignore[return-value]
+
     except FileNotFoundError:
         logger.error(f"{fortime()}: {file_name} Doesn't Exist!")
         time.sleep(5)
         return None
     except ValueError:
-        variable = open_file()
-        return f"ValueError Converting {variable} (type; {type(variable)}) to {return_type}"
+        raw = open_file()
+        return f"ValueError Converting {raw!r} (type: {type(raw)}) to {return_type}"
     except Exception as _error:
         error_msg = f"{fortime()}: Error in 'read_file' -- Generic Error -- {_error}"
         logger.error(error_msg)
@@ -288,7 +350,7 @@ def save_data_stream(_data: dict, file_save: str) -> None:
     save_json(_data, DIRECTORIES['stream'] / file_save)
 
 
-def save_json(_data: dict, file_save: Path | str) -> None:
+def save_json(_data: dict | None, file_save: Path | str) -> None:
     if _data is None:
         logger.error(f"{fortime()}: _data is None!!!")
         return
@@ -304,14 +366,14 @@ def shutdown_logger(_log_list: list) -> None:
             print(f"{entry} moved to archives..")
         except Exception as _error:
             print(_error)
-            time.sleep(10)
-            pass
+            time.sleep(5)
+            continue
 
 
-def setup_logger(name: str, log_file: str, _log_list: list, level=logging.INFO) -> logging.Logger | None:
+def setup_logger(name: str, log_file: str, _log_list: list, level=logging.INFO) -> logging.Logger:
     try:
         local_logger = logging.getLogger(name)
-        handler = logging.FileHandler(Path(DIRECTORIES['logs'] / log_file), mode="w", encoding="utf-8")
+        handler = logging.FileHandler(DIRECTORIES['logs'] / log_file, mode="w", encoding="utf-8")
         if name == "logger":
             console_handler = logging.StreamHandler()
             local_logger.addHandler(console_handler)
@@ -320,10 +382,10 @@ def setup_logger(name: str, log_file: str, _log_list: list, level=logging.INFO) 
         _log_list.append(log_file)
         return local_logger
     except Exception as _error:
-        print(f"{fortime()}: ERROR in setup_logger - {name}/{log_file}/{level} -- {_error}")
-        time.sleep(15)
-        _log_list.append(None)
-        return None
+        print(f"{fortime()}: ERROR in setup_logger - {name}/{log_file}/{level} -- {_error}\n{bot.long_dashes()}")
+        print(f"This Window Will Close In 60 Seconds, Copy Above And Paste Into Text Editor!\n{bot.long_dashes()}")
+        time.sleep(60)
+        exit()
 
 
 def subbie_tier_check(raw_tier: str) -> str:
@@ -341,7 +403,7 @@ def total_subbies() -> int:
 
 def update_auth_json(current_dict: dict) -> dict:
     while True:
-        cls()
+        clear()
         _user_input = input("Enter In Client ID\n")
         if _user_input == "":
             print("Invalid Input, try again")
@@ -352,7 +414,7 @@ def update_auth_json(current_dict: dict) -> dict:
             time.sleep(2)
             break
     while True:
-        cls()
+        clear()
         _user_input = input("Enter In Secret ID\n")
         if _user_input == "":
             print("Invalid Input, try again")
@@ -369,18 +431,18 @@ def update_auth_json(current_dict: dict) -> dict:
 # ----------------- MAIN_BOT_FUNCTIONS ----------------- #
 async def on_message(msg: ChatMessage) -> None:
     try:
-        if msg.user.name != bot.target_rooms[0] and msg.user.name not in BOT_NAMES:
+        if msg.user.name != bot.target_room[0] and msg.user.name not in BOT_NAMES:
             data_stream['data']['chat_msg_count'] += 1
         time_ = fortime()
         logger_chat.info(f"{time_}: {msg.user.id}|{msg.user.display_name}; {msg.text}")
-        logger_test.info(f"{time_}: text; {msg.text}\nhype chat; {msg.hype_chat}\nbits; {msg.bits}\nemotes; {msg.emotes}\nfirst; {msg.first}\n")
+        logger_test.info(f"{time_}: text; {msg.text}\nhype chat; {msg.hype_chat}\nbits; {msg.bits}\nemotes; {msg.emotes}\nfirst; {msg.first}\nis_me; {msg.is_me}")
         if msg.bits > 0:
             data_stream['data']['bits'] += msg.bits
             logger_sim.info(f"{HYPE} {msg.user.display_name} for cheering {msg.bits:,} bits!!")
         elif msg.first:
             data_stream['data']['chatters_new'] += 1
             logger_sim.info(f"Welcome aboard @{msg.user.display_name}")
-        elif msg.user.name == bot.target_rooms[0] and "gifting" in msg.text:
+        elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
             number_subs, _ = number_subs.split(" subscription")
@@ -389,7 +451,7 @@ async def on_message(msg: ChatMessage) -> None:
             elif number_subs == "a":
                 number_subs = 1
             else:
-                logger.error(f"{fortime()}: Error in 'on_message/elif msg.user.name == bot.target_rooms[0]/number_subs can't be figured' -- {number_subs}")
+                logger.error(f"{fortime()}: Error in 'on_message/elif msg.user.name == bot.target_room[0]/number_subs can't be figured' -- {number_subs}")
                 number_subs = 0
             data_stream['data']['subbies_gifted'] += number_subs
             logger_sim.info(f"{HYPE} {username} for the {number_subs:,} GIFT SUBS!")
@@ -426,10 +488,10 @@ async def on_raid(event: dict) -> None:
 
 async def on_ready(event: EventData) -> None:
     try:
-        for username in bot.target_rooms:
-            await event.chat.join_room(username)
-            users_in_chat[username] = [user.login]
-            logger.info(f"{fortime()}: Joined {username} chat!")
+        username = bot.target_room[0]
+        await event.chat.join_room(username)
+        users_in_chat[username] = [user.login]
+        logger.info(f"{fortime()}: Joined {username} chat!\n{bot.long_dashes()}")
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_ready' - {_error}")
         return
@@ -442,6 +504,7 @@ async def on_sub(sub: ChatSub) -> None:
         logger_sub.info(f"{time_}: sub plan; {sub.sub_plan}\nsub plan name; {sub.sub_plan_name}\nsub type; {sub.sub_type}\nsub msg; {sub.sub_message}\nsys msg; {sub.system_message}")
         try:
             if sub.sub_type == "sub":
+                data_stream['data']['subbies_new'] += 1
                 logger.info(f"{time_}: NEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\n")
                 logger_sub.info(f"{time_}: NEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\nNEWSUB\n")
         except Exception as _error:
@@ -449,14 +512,22 @@ async def on_sub(sub: ChatSub) -> None:
             return
         if sub.sub_type == "resub":
             try:
-                streak_sub_time = 0
-                system_msg = sub.system_message.split("\\", maxsplit=16)
-                username = system_msg[0]
-                sub_tier = system_msg[4].lstrip("s").rstrip(".")
-                total_sub_time = int(system_msg[8].lstrip("s"))
-                if len(system_msg) > 10:
-                    streak_sub_time = int(system_msg[13].lstrip("s"))
-                data_stream['data']['subbies_resub'] += 1
+                data_stream['data']['subbies_renewed'] += 1
+                sub_plan = sub.sub_plan
+                sub_msg = sub.sub_message.split("\\", maxsplit=9)
+                sys_msg = sub.system_message.split("\\", maxsplit=16)
+                if sub_plan == "Prime":
+                    sub_tier = 1
+                else:
+                    sub_tier = sub_msg[4].lstrip("s").rstrip(".")
+                username = sys_msg[0]
+                logger_sub.info(f"{time_}: username; {username}\n sub_plan; {sub_plan}\nsub_msg; {sub_msg}\nsys_msg({len(sys_msg)}); {sys_msg}")
+                if len(sys_msg) > 10:
+                    total_sub_time = int(sys_msg[8].lstrip("s"))
+                    streak_sub_time = int(sys_msg[13].lstrip("s"))
+                else:
+                    total_sub_time = int(sys_msg[8].lstrip("s"))
+                    streak_sub_time = 0
                 logger_sim.info(f"{HYPE} @{username} for the T{sub_tier} RESUB!!{f" @{username} has been subbed for {total_sub_time:,} Months{f", currently on a {streak_sub_time} Streak!!" if streak_sub_time > 0 else "!!"}" if total_sub_time > 0 else ""}")
             except Exception as _error:
                 logger.error(f"{fortime()}: ERROR 'on_sub/resub' - {_error}")
@@ -469,7 +540,7 @@ async def on_sub(sub: ChatSub) -> None:
 async def on_user_join(event: JoinEvent) -> None:
     try:
         chatter_name = event.user_name
-        streamer_name = event.room.name
+        streamer_name = bot.target_room[0]
         if chatter_name == streamer_name or chatter_name in BOT_NAMES:
             return
         elif chatter_name not in users_in_chat[streamer_name]:
@@ -525,7 +596,7 @@ async def run() -> None:
 
     await asyncio.sleep(1.5)
     while True:
-        cls()
+        clear()
         save_data_stream(data_stream, SAVE_FILE)
         try:
             try:
@@ -538,7 +609,7 @@ async def run() -> None:
                     "subbies_gifted": f"{data_stream['data']['subbies_gifted']:,}",
                     "subbies_new": f"{data_stream['data']['subbies_new']:,}",
                     "subbies_renewed": f"{data_stream['data']['subbies_renewed']:,}",
-                    "raids": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}"
+                    "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}"
                 }
                 print_stream_stats(stream_stats)
             except Exception as _error:
@@ -554,8 +625,8 @@ async def run() -> None:
                 if user_input == 0:
                     break
                 elif user_input == 1:
-                    cls()
-                    for username in sorted(users_in_chat[bot.target_rooms[0]]):
+                    clear()
+                    for username in sorted(users_in_chat[bot.target_room[0]]):
                         print(username)
                     print(f"{bot.long_dashes()}\nTotal; {fetch_users()}")
                     input("Hit enter to continue...")
@@ -569,6 +640,8 @@ async def run() -> None:
                     await bot.invalid_input()
             else:
                 await bot.invalid_input()
+        except SystemExit:
+            break
         except KeyboardInterrupt:
             break
         except Exception as e:
@@ -584,11 +657,12 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
-    def shutdown():
-        save_data_stream(data_stream, SAVE_FILE)
-        logger.info(f"{fortime()}: '{SAVE_FILE}' saved!")
+    def shutdown(save_file_init: bool):
+        if save_file_init:
+            save_data_stream(data_stream, SAVE_FILE)
+            logger.info(f"{fortime()}: '{SAVE_FILE}' saved!")
         shutdown_logger(log_list)
-        cls()
+        clear()
         sys.exit(0)
 
     init_time = datetime.now().strftime(FORMAT_TIME)
@@ -607,7 +681,7 @@ if __name__ == "__main__":
         print(f"One or more logger files not set up right\n{log_list}")
         print("Shutting down in 30 seconds")
         time.sleep(30)
-        shutdown()
+        shutdown(SAVE_FILE_INIT)
 
     try:
         auth_dict = check_db_auth()
@@ -615,16 +689,16 @@ if __name__ == "__main__":
             bot = BotSetup(auth_dict['bot_id'], auth_dict['secret_id'])
             asyncio.run(auth_bot())
             user = asyncio.run(get_auth_user_id())
-            if user is not None:
-                data_stream, data_stream_timestamp = fetch_data_stream(data_stream_timestamp)
-                SAVE_FILE = f"{init_time if data_stream_timestamp == 0 else datetime.strftime(datetime.fromtimestamp(data_stream_timestamp), FORMAT_TIME)}.json"
-                if data_stream['info']['streamer'] is None:
-                    data_stream['info']['streamer'] = bot.target_rooms[0]
-                if data_stream['info']['time']['started'] is None:
-                    data_stream['info']['time']['started'] = datetime.strftime(datetime.fromtimestamp(data_stream_timestamp), FORMAT_TIME)
-                asyncio.run(run())
-        shutdown()
+            data_stream, data_stream_timestamp = fetch_data_stream(data_stream_timestamp)
+            SAVE_FILE = f"{init_time if data_stream_timestamp == 0 else datetime.strftime(datetime.fromtimestamp(data_stream_timestamp), FORMAT_TIME)}.json"
+            SAVE_FILE_INIT = True
+            if data_stream['info']['streamer'] is None:
+                data_stream['info']['streamer'] = bot.target_room[0]
+            if data_stream['info']['time']['started'] is None:
+                data_stream['info']['time']['started'] = init_time
+            asyncio.run(run())
+        shutdown(SAVE_FILE_INIT)
     except KeyboardInterrupt:
-        shutdown()
+        shutdown(SAVE_FILE_INIT)
     except Exception as e:
         logger.error(f"{fortime()}: Error in main loop -- {e}")

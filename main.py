@@ -130,6 +130,7 @@ class BotSetup(Twitch):
             # "piousduck83"
             # "rocker_joe"
             # "sissythatgame"
+            # "therealmorticia"
         ]
         self.target_scopes = [
             AuthScope.CHANNEL_BOT,
@@ -234,7 +235,14 @@ def create_new_data_stream() -> dict:
                     "resub": 0
                 },
                 "viewers": {
-                    "avg": 0,
+                    "avg": 0.0,
+                    "avg2": 0.0,
+                    "avg3": 0.0,
+                    "avg4": 0.0,
+                    "avg5": 0.0,
+                    "avg6": 0.0,
+                    "avg7": 0.0,
+                    "avg8": 0.0,
                     "current": 0,
                     "max": 0,
                     "min": 0
@@ -246,7 +254,8 @@ def create_new_data_stream() -> dict:
                     "ended": None,
                     "started": None
                 }
-            }
+            },
+            "viewers": []
         }
 
     _data_stream = fetch_stock_data()
@@ -266,7 +275,7 @@ def fetch_data_stream() -> dict:
         if datetime.now().timestamp() - datetime.strptime(_data_stream['info']['time']['ended'], FORMAT_TIME).timestamp() < 3600:
             return _data_stream
         else:
-            move_file(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / filename)
+            move_file(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / f"{filename.removesuffix('.json')}_{_data_stream['info']['time']['ended']}.json")
     return create_new_data_stream()
 
 
@@ -376,7 +385,7 @@ def read_file(file_name: Path | str,
 
 
 def save_data_stream(_data: dict, file_save: str) -> None:
-    _data = viewers_update(_data)
+    _data = update_viewers(_data)
     _data['info']['time']['ended'] = datetime.strftime(datetime.now(), FORMAT_TIME)
     save_json(_data, DIRECTORIES['stream'] / file_save)
 
@@ -461,20 +470,68 @@ def update_auth_json(current_dict: dict) -> dict:
     return current_dict
 
 
-def viewers_fetch_current() -> int:
+def fetch_viewers_current() -> int:
     return len(users_in_chat[bot.target_room[0]])
 
 
-def viewers_update(_data: dict) -> dict:
-    viewers_current = viewers_fetch_current()
+def update_viewers(_data: dict) -> dict:
+    now_time = datetime.now()
+    viewers_current = fetch_viewers_current()
+
     _data['data']['viewers']['current'] = viewers_current
-    if datetime.now().timestamp() - datetime.strptime(_data['info']['time']['started'], FORMAT_TIME).timestamp() < 900:
+    if now_time.timestamp() - datetime.strptime(_data['info']['time']['started'], FORMAT_TIME).timestamp() < 900:
         # _data['data']['viewers']['min'] = viewers_current if viewers_current > _data['data']['viewers']['min'] else _data['data']['viewers']['min']
         _data['data']['viewers']['min'] = viewers_current
     else:
         _data['data']['viewers']['min'] = _data['data']['viewers']['min'] if _data['data']['viewers']['min'] < viewers_current else viewers_current
     _data['data']['viewers']['max'] = _data['data']['viewers']['max'] if _data['data']['viewers']['max'] > viewers_current else viewers_current
+
+    total_time = now_time.timestamp() - datetime.strptime(_data['info']['time']['started'], FORMAT_TIME).timestamp()
+
+    weighted_sum = 0.0
+    weighted_sum2 = 0.0
+    weighted_sum3 = 0.0
+    weighted_sum4 = 0.0
+    for i, (ts, viewers) in enumerate(_data['viewers']):
+        next_ts = _data['viewers'][i + 1][0] if i + 1 < len(_data['viewers']) else now_time.strftime(FORMAT_TIME)
+        duration = datetime.strptime(next_ts, FORMAT_TIME).timestamp() - datetime.strptime(ts, FORMAT_TIME).timestamp()
+        weighted_sum += viewers - duration
+        weighted_sum2 += viewers + duration
+        weighted_sum3 += viewers * duration
+        try:
+            weighted_sum4 += duration / viewers
+        except ZeroDivisionError:
+            weighted_sum4 = 0.0
+
+    weighted_sum5 = 0.0
+    weighted_sum6 = 0.0
+    weighted_sum7 = 0.0
+    weighted_sum8 = 0.0
+    for i, (ts, viewers) in enumerate(_data['viewers'], start=1):
+        next_ts = _data['viewers'][i + 1][0] if i + 1 < len(_data['viewers']) else now_time.strftime(FORMAT_TIME)
+        duration = datetime.strptime(next_ts, FORMAT_TIME).timestamp() - datetime.strptime(ts, FORMAT_TIME).timestamp()
+        weighted_sum5 += viewers - duration
+        weighted_sum6 += viewers + duration
+        weighted_sum7 += viewers * duration
+        try:
+            weighted_sum8 += duration / viewers
+        except ZeroDivisionError:
+            weighted_sum8 = 0.0
+
+    _data['data']['viewers']['avg'] = weighted_sum / total_time
+    _data['data']['viewers']['avg2'] = weighted_sum2 / total_time
+    _data['data']['viewers']['avg3'] = weighted_sum3 / total_time
+    _data['data']['viewers']['avg4'] = weighted_sum4 / total_time
+    _data['data']['viewers']['avg5'] = weighted_sum5 / total_time
+    _data['data']['viewers']['avg6'] = weighted_sum6 / total_time
+    _data['data']['viewers']['avg7'] = weighted_sum7 / total_time
+    _data['data']['viewers']['avg8'] = weighted_sum8 / total_time
+
     return _data
+
+
+def update_viewers_avg():
+    data_stream['viewers'].append((datetime.now().strftime(FORMAT_TIME), fetch_viewers_current()))
 
 
 # ----------------- MAIN_BOT_FUNCTIONS ----------------- #
@@ -544,6 +601,7 @@ async def on_ready(event: EventData) -> None:
         username = bot.target_room[0]
         await event.chat.join_room(username)
         users_in_chat[username] = [user.login]
+        data_stream['viewers'].append((datetime.now().strftime(FORMAT_TIME), 1))
         logger.info(f"{fortime()}: Joined {username} chat!\n{bot.long_dashes()}")
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_ready' - {_error}")
@@ -558,7 +616,7 @@ async def on_sub(sub: ChatSub) -> None:
         if sub.sub_type == "sub":
             try:
                 data_stream['data']['subbies']['new'] += 1
-                logger_sim.info(f"{HYPE} {sub.system_message.split('\\s')[0]} for the BRAND NEW {subbie_tier_check(sub.sub_plan).capitalize()} SUB!!")
+                logger_sim.info(f"{HYPE} {sub.system_message.split('\\s')[0]} for the BRAND NEW {subbie_tier_check(sub.sub_plan).upper()} SUB!!")
             except Exception as _error:
                 logger.error(f"{fortime()}: ERROR 'on_sub/sub' - {_error}")
                 return
@@ -596,8 +654,9 @@ async def on_user_join(event: JoinEvent) -> None:
             return
         elif chatter_name not in users_in_chat[streamer_name]:
             users_in_chat[streamer_name].append(chatter_name)
-            logger_viewers.info(f"{fortime()}: {chatter_name} has joined the chat! {len(users_in_chat[streamer_name])} viewers present!")
-            viewers_update(data_stream)
+            logger_viewers.info(f"{fortime()}: {chatter_name} has joined the chat! {fetch_viewers_current():,} viewers present!")
+            update_viewers_avg()
+            update_viewers(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_join' - {_error}")
         return
@@ -611,8 +670,9 @@ async def on_user_left(event: LeftEvent) -> None:
             return
         elif chatter_name in users_in_chat[streamer_name]:
             users_in_chat[streamer_name].remove(chatter_name)
-            logger_viewers.info(f"{fortime()}: {event.user_name} has left the chat! {len(users_in_chat[streamer_name])} viewers present!")
-            viewers_update(data_stream)
+            logger_viewers.info(f"{fortime()}: {event.user_name} has left the chat! {fetch_viewers_current():,} viewers present!")
+            update_viewers_avg()
+            update_viewers(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_left' - {_error}")
         return
@@ -635,6 +695,8 @@ async def run() -> None:
         await bot.close()
         logger.info(f"{fortime()}: Bot Closed!\n{bot.long_dashes()}")
         await asyncio.sleep(1)
+
+    # global data_stream
 
     chat = await Chat(bot)
     chat.register_event(ChatEvent.READY, on_ready)
@@ -663,6 +725,14 @@ async def run() -> None:
                     "subbies_total": f"{total_subbies():,}",
                     "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
                     "viewers": f"{data_stream['data']['viewers']['current']:,}",
+                    "viewers_avg": f"{data_stream['data']['viewers']['avg']:.2f}",
+                    "viewers_avg_2": f"{data_stream['data']['viewers']['avg2']:.2f}",
+                    "viewers_avg_3": f"{data_stream['data']['viewers']['avg3']:.2f}",
+                    "viewers_avg_4": f"{data_stream['data']['viewers']['avg4']:.2f}",
+                    "viewers_avg_5": f"{data_stream['data']['viewers']['avg5']:.2f}",
+                    "viewers_avg_6": f"{data_stream['data']['viewers']['avg6']:.2f}",
+                    "viewers_avg_7": f"{data_stream['data']['viewers']['avg7']:.2f}",
+                    "viewers_avg_8": f"{data_stream['data']['viewers']['avg8']:.2f}",
                     "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
                     "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
                 }
@@ -676,6 +746,50 @@ async def run() -> None:
                                f"Enter Nothing To Refresh\n")
             if user_input == "":
                 pass
+            elif user_input.startswith("a_"):
+                keyboard_interrupt = False
+                times_run = int(int(user_input.lstrip("a_")) / 10)
+                for x in range(times_run):
+                    try:
+                        if keyboard_interrupt:
+                            break
+                        clear()
+                        # data_stream = update_viewers(data_stream)
+                        save_data_stream(data_stream, SAVE_FILE)
+                        stream_stats = {
+                            "bits": f"{data_stream['data']['bits']:,}",
+                            "chat_msg_count": f"{data_stream['data']['chat_msg_count']:,}",
+                            "chat_new_viewer": f"{data_stream['data']['chatters_new']:,}",
+                            "subbies_gifted": f"{data_stream['data']['subbies']['gifted']:,}",
+                            "subbies_new": f"{data_stream['data']['subbies']['new']:,}",
+                            "subbies_resub": f"{data_stream['data']['subbies']['resub']:,}",
+                            "subbies_total": f"{total_subbies():,}",
+                            "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
+                            "viewers": f"{data_stream['data']['viewers']['current']:,}",
+                            "viewers_avg": f"{data_stream['data']['viewers']['avg']:.2f}",
+                            "viewers_avg_2": f"{data_stream['data']['viewers']['avg2']:.2f}",
+                            "viewers_avg_3": f"{data_stream['data']['viewers']['avg3']:.2f}",
+                            "viewers_avg_4": f"{data_stream['data']['viewers']['avg4']:.2f}",
+                            "viewers_avg_5": f"{data_stream['data']['viewers']['avg5']:.2f}",
+                            "viewers_avg_6": f"{data_stream['data']['viewers']['avg6']:.2f}",
+                            "viewers_avg_7": f"{data_stream['data']['viewers']['avg7']:.2f}",
+                            "viewers_avg_8": f"{data_stream['data']['viewers']['avg8']:.2f}",
+                            "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
+                            "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
+                        }
+                        print_stream_stats(stream_stats)
+                        print(f"{bot.long_dashes()}\nRun {x + 1} out of {times_run}")
+                        await asyncio.sleep(10)
+                    except KeyboardInterrupt:
+                        keyboard_interrupt = True
+                        continue
+                    except Exception as _error:
+                        logger.error(f"{fortime()}: ERROR 'on_stream_stats/auto-refresh' - {_error}")
+                        try:
+                            continue
+                        except Exception as ee:
+                            logger.error(f"{fortime()}: Error continuing from last error -- {ee}")
+                            break
             elif user_input.isdigit():
                 user_input = int(user_input)
                 if user_input == 0:
@@ -684,7 +798,7 @@ async def run() -> None:
                     clear()
                     for username in sorted(users_in_chat[bot.target_room[0]]):
                         print(username)
-                    print(f"{bot.long_dashes()}\nTotal; {viewers_fetch_current():,}")
+                    print(f"{bot.long_dashes()}\nTotal; {fetch_viewers_current():,}")
                     input("Hit enter to continue...")
                 elif user_input == 69:
                     input("haha, funny sex number")

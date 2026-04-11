@@ -8,7 +8,7 @@ import logging
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from copy import deepcopy as copy
+# from copy import deepcopy as copy
 from twitchAPI.twitch import Twitch
 from typing import Literal, overload
 from twitchAPI.object.api import TwitchUser
@@ -69,35 +69,35 @@ BOT_NAMES = (
     "tangiabot",
     "wizebot"
 )
-BLANK_STREAM_DATA = {
-    "data": {
-        "bits": 0,
-        "chat_msg_count": 0,
-        "chatters_new": 0,
-        "raids": {
-            "total": 0,
-            "viewers": 0
-        },
-        "subbies": {
-            "gifted": 0,
-            "new": 0,
-            "resub": 0
-        },
-        "viewers": {
-            "avg": 0,
-            "current": 0,
-            "max": 0,
-            "min": 0
-        }
-    },
-    "info": {
-        "streamer": None,
-        "time": {
-            "ended": None,
-            "started": None
-            }
-}
-}
+# BLANK_STREAM_DATA = {
+#     "data": {
+#         "bits": 0,
+#         "chat_msg_count": 0,
+#         "chatters_new": 0,
+#         "raids": {
+#             "total": 0,
+#             "viewers": 0
+#         },
+#         "subbies": {
+#             "gifted": 0,
+#             "new": 0,
+#             "resub": 0
+#         },
+#         "viewers": {
+#             "avg": 0,
+#             "current": 0,
+#             "max": 0,
+#             "min": 0
+#         }
+#     },
+#     "info": {
+#         "streamer": None,
+#         "time": {
+#             "ended": None,
+#             "started": None
+#             }
+# }
+# }
 EMOTES = {
     "flag": {
         "roll": "therav27FlagRoll"
@@ -112,7 +112,6 @@ EMOTES = {
 }
 FORMAT_TIME = "%Y-%m-%d--%H-%M-%S"
 HYPE = "!hyp"
-SAVE_FILE_INIT = False
 
 log_list = []
 users_in_chat = {}
@@ -127,10 +126,10 @@ class BotSetup(Twitch):
         self.target_room = [
             # "theravenarmed"
             # "theechody"
-            # "xboxbaldmara"
+            "xboxbaldmara"
             # "piousduck83"
             # "rocker_joe"
-            "sissythatgame"
+            # "sissythatgame"
         ]
         self.target_scopes = [
             AuthScope.CHANNEL_BOT,
@@ -219,7 +218,40 @@ def check_db_auth() -> dict | None:
 
 
 def create_new_data_stream() -> dict:
-    _data_stream = copy(BLANK_STREAM_DATA)
+    def fetch_stock_data() -> dict:
+        return {
+            "data": {
+                "bits": 0,
+                "chat_msg_count": 0,
+                "chatters_new": 0,
+                "raids": {
+                    "total": 0,
+                    "viewers": 0
+                },
+                "subbies": {
+                    "gifted": 0,
+                    "new": 0,
+                    "resub": 0
+                },
+                "viewers": {
+                    "avg": 0,
+                    "current": 0,
+                    "max": 0,
+                    "min": 0
+                }
+            },
+            "info": {
+                "streamer": None,
+                "time": {
+                    "ended": None,
+                    "started": None
+                }
+            }
+        }
+
+    _data_stream = fetch_stock_data()
+    _data_stream['info']['streamer'] = bot.target_room[0]
+    _data_stream['info']['time']['started'] = datetime.now().strftime(FORMAT_TIME)
     return _data_stream
 
 
@@ -227,26 +259,15 @@ def clear() -> None:
     subprocess.run(['cls' if os.name == 'nt' else 'clear'], shell=(os.name == 'nt'))
 
 
-def fetch_data_stream(_data_stream_timestamp: float) -> tuple[dict, float]:
-    date_form_current = datetime.now()
-    for _, __, files in os.walk(DIRECTORIES['stream']):
-        for filename in files:
-            if filename.endswith(".json"):
-                try:
-                    date_form = datetime.strptime(filename.replace('.json', ''), FORMAT_TIME)
-                    if date_form_current.timestamp() - date_form.timestamp() < (3600 * 6):
-                        _data_stream_timestamp = date_form.timestamp()
-                        _data_stream = read_file(DIRECTORIES['stream'] / filename, return_type=DictOptions(json=True))
-                        if _data_stream['info']['streamer'] == bot.target_room[0]:
-                            return _data_stream, _data_stream_timestamp
-                        else:
-                            move_file(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / filename)
-                    else:
-                        move_file(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / filename)
-                except Exception as _error:
-                    logger.error(f"{fortime()}: ERROR in 'fetch_data_stream' -- {_error}")
-                    return create_new_data_stream(), _data_stream_timestamp
-    return create_new_data_stream(), _data_stream_timestamp
+def fetch_data_stream() -> dict:
+    filename = f"{bot.target_room[0]}.json"
+    if filename in os.listdir(DIRECTORIES['stream']):
+        _data_stream = read_file(DIRECTORIES['stream'] / filename, DictOptions(json=True))
+        if datetime.now().timestamp() - datetime.strptime(_data_stream['info']['time']['ended'], FORMAT_TIME).timestamp() < 3600:
+            return _data_stream
+        else:
+            move_file(DIRECTORIES['stream'] / filename, DIRECTORIES['stream_archive'] / filename)
+    return create_new_data_stream()
 
 
 def fortime() -> str:
@@ -279,7 +300,7 @@ def move_file(old_path: Path, new_path: Path) -> None:
     try:
         os.rename(old_path, new_path)
     except Exception as _error:
-        logger.error(f"{fortime()}: Error in 'fetch_data_stream' -- Moving {old_path} to {new_path} -- {_error}")
+        logger.error(f"{fortime()}: Error in 'move_file' -- Moving {old_path} to {new_path} -- {_error}")
 
 
 def print_max_length(_str: str, length: int) -> str:
@@ -448,7 +469,8 @@ def viewers_update(_data: dict) -> dict:
     viewers_current = viewers_fetch_current()
     _data['data']['viewers']['current'] = viewers_current
     if datetime.now().timestamp() - datetime.strptime(_data['info']['time']['started'], FORMAT_TIME).timestamp() < 900:
-        _data['data']['viewers']['min'] = viewers_current if viewers_current > _data['data']['viewers']['min'] else _data['data']['viewers']['min']
+        # _data['data']['viewers']['min'] = viewers_current if viewers_current > _data['data']['viewers']['min'] else _data['data']['viewers']['min']
+        _data['data']['viewers']['min'] = viewers_current
     else:
         _data['data']['viewers']['min'] = _data['data']['viewers']['min'] if _data['data']['viewers']['min'] < viewers_current else viewers_current
     _data['data']['viewers']['max'] = _data['data']['viewers']['max'] if _data['data']['viewers']['max'] > viewers_current else viewers_current
@@ -534,22 +556,28 @@ async def on_sub(sub: ChatSub) -> None:
         logger_sub.info(f"{_time}: {type(sub)}\n{sub}\n")
         logger_sub.info(f"{_time}: sub plan; {sub.sub_plan}\nsub plan name; {sub.sub_plan_name}\nsub type; {sub.sub_type}\nsub msg; {sub.sub_message}\nsys msg; {sub.system_message}")
         if sub.sub_type == "sub":
-            data_stream['data']['subbies']['new'] += 1
-            logger_sim.info(f"{HYPE} {sub.system_message.split('\\')[0]} for the BRAND NEW {subbie_tier_check(sub.sub_plan).capitalize()} SUB!!")
-        if sub.sub_type == "resub":
+            try:
+                data_stream['data']['subbies']['new'] += 1
+                logger_sim.info(f"{HYPE} {sub.system_message.split('\\s')[0]} for the BRAND NEW {subbie_tier_check(sub.sub_plan).capitalize()} SUB!!")
+            except Exception as _error:
+                logger.error(f"{fortime()}: ERROR 'on_sub/sub' - {_error}")
+                return
+        elif sub.sub_type == "resub":
             try:
                 data_stream['data']['subbies']['resub'] += 1
-                # sub_plan_name = sub.sub_plan_name
-                # sub_msg = sub.sub_message.split("\\", maxsplit=9)
-                sys_msg = sub.system_message.split("\\", maxsplit=16)
+                sys_msg = sub.system_message.split('\\s', maxsplit=16)
                 username = sys_msg[0]
-                # logger_sub.info(f"{_time}: username; {username}\n sub_plan_name; {sub_plan_name}\nsub_msg; {sub_msg}\nsys_msg({len(sys_msg)}); {sys_msg}")
-                total_sub_time = int(sys_msg[8].lstrip("s"))
-                if len(sys_msg) > 10:
-                    # total_sub_time = int(sys_msg[8].lstrip("s"))
-                    streak_sub_time = int(sys_msg[13].lstrip("s"))
+                logger_sub.info(f"\n{_time}: username; {username}\n sub_plan_name; {sub.sub_plan_name}\nsys_msg({len(sys_msg)}); {sys_msg}\n")
+                if sub.sub_plan == "Prime":
+                    total_sub_time = int(sys_msg[7])
                 else:
-                    # total_sub_time = int(sys_msg[8].lstrip("s"))
+                    total_sub_time = int(sys_msg[8])
+                if len(sys_msg) > 10:
+                    if sub.sub_plan == "Prime":
+                        streak_sub_time = int(sys_msg[12])
+                    else:
+                        streak_sub_time = int(sys_msg[13])
+                else:
                     streak_sub_time = 0
                 logger_sim.info(f"{HYPE} {username} for the {subbie_tier_check(sub.sub_plan)} RESUB!!{f" {username} has been subbed for {total_sub_time:,} Months{f", currently on a {streak_sub_time} Streak!!" if streak_sub_time > 0 else "!!"}" if total_sub_time > 0 else ""}")
             except Exception as _error:
@@ -685,10 +713,9 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
-    def shutdown(save_file_init: bool):
-        if save_file_init:
-            save_data_stream(data_stream, SAVE_FILE)
-            logger.info(f"{fortime()}: '{SAVE_FILE}' saved!")
+    def shutdown():
+        save_data_stream(data_stream, SAVE_FILE)
+        logger.info(f"{fortime()}: '{SAVE_FILE}' saved!")
         shutdown_logger(log_list)
         clear()
         sys.exit(0)
@@ -709,7 +736,7 @@ if __name__ == "__main__":
         print(f"One or more logger files not set up right\n{log_list}")
         print("Shutting down in 30 seconds")
         time.sleep(30)
-        shutdown(SAVE_FILE_INIT)
+        shutdown()
 
     try:
         auth_dict = check_db_auth()
@@ -717,16 +744,11 @@ if __name__ == "__main__":
             bot = BotSetup(auth_dict['bot_id'], auth_dict['secret_id'])
             asyncio.run(auth_bot())
             user = asyncio.run(get_auth_user_id())
-            data_stream, data_stream_timestamp = fetch_data_stream(data_stream_timestamp)
-            SAVE_FILE = f"{init_time if data_stream_timestamp == 0 else datetime.strftime(datetime.fromtimestamp(data_stream_timestamp), FORMAT_TIME)}.json"
-            SAVE_FILE_INIT = True
-            if data_stream['info']['streamer'] is None:
-                data_stream['info']['streamer'] = bot.target_room[0]
-            if data_stream['info']['time']['started'] is None:
-                data_stream['info']['time']['started'] = init_time
+            data_stream = fetch_data_stream()
+            SAVE_FILE = f"{bot.target_room[0]}.json"
             asyncio.run(run())
-        shutdown(SAVE_FILE_INIT)
+        shutdown()
     except KeyboardInterrupt:
-        shutdown(SAVE_FILE_INIT)
+        shutdown()
     except Exception as e:
         logger.error(f"{fortime()}: Error in main loop -- {e}")

@@ -18,8 +18,8 @@ from twitchAPI.oauth import UserAuthenticationStorageHelper
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, NoticeEvent, WhisperEvent, JoinEvent, LeftEvent
 
 # ToDo -------------------------------------------------------------------------------------------------------- #
-#  1; Add tracker for 'fourthwall' giveaway's that catches user_id with username, and if username tries to redeem
-#     '!claim', remind them via whisper/msg (unclear, probably best to chat msg) to use fourthwall redeem link
+#  1; Add tracker for 'fourthwall' giveaway's that if username tries to redeem '!claim', remind them via
+#     whisper/msg (unclear, probably best to chat msg) to use fourthwall redeem link
 #  END OF LIST ------------------------------------------------------------------------------------------------ #
 
 
@@ -50,10 +50,11 @@ DATA_PATH = get_data_path()
 DIRECTORIES = {
     "auth": DATA_PATH / "auth",
     "data": DATA_PATH / "data",
+    "logs": DATA_PATH / "logs",
+    "logs_archive": DATA_PATH / ".archived" / "logs",
     "stream": DATA_PATH / "data" / "stream",
     "stream_archive": DATA_PATH / ".archived" / "data" / "stream",
-    "logs": DATA_PATH / "logs",
-    "logs_archive": DATA_PATH / ".archived" / "logs"
+    "viewers": DATA_PATH / "data" / "viewers"
 }
 
 for path in DIRECTORIES.values():
@@ -102,7 +103,8 @@ HYPE = "!hyp"
 
 # ----------------- FILES  ----------------- #
 AUTH_JSON = DIRECTORIES['auth'] / "auth_info.json"
-FILENAME = f"{CHAT_ROOM[0]}.json"
+FILENAME_DATA_STREAM = f"{CHAT_ROOM[0]}.json"
+FILENAME_VIEWERS = f"{CHAT_ROOM[0]}.json"
 TWITCH_TOKEN = DIRECTORIES['auth'] / "twitch_token.json"
 
 # ----------------- VARIABLES  ----------------- #
@@ -125,13 +127,20 @@ class BotSetup(Twitch):
             AuthScope.WHISPERS_READ
         ]
         self.viewers = {
-            "in_chat": {}
+            "in_chat": {},
+            "total": {}
         }
 
     @staticmethod
     async def invalid_input() -> None:
         print("Invalid input, try again...")
         await asyncio.sleep(2)
+
+    def load_viewers(self):
+        if FILENAME_VIEWERS in os.listdir(DIRECTORIES["viewers"]):
+            self.viewers['total'] = read_file(DIRECTORIES["viewers"] / FILENAME_VIEWERS, DictOptions(json=True))
+        else:
+            self.viewers['total'] = {}
 
     @staticmethod
     def long_dashes() -> str:
@@ -249,12 +258,12 @@ def clear(display_top: bool = True) -> None:
 
 
 def fetch_data_stream() -> dict:
-    if FILENAME in os.listdir(DIRECTORIES['stream']):
-        _data_stream = read_file(DIRECTORIES['stream'] / FILENAME, DictOptions(json=True))
+    if FILENAME_DATA_STREAM in os.listdir(DIRECTORIES['stream']):
+        _data_stream = read_file(DIRECTORIES['stream'] / FILENAME_DATA_STREAM, DictOptions(json=True))
         if datetime.now().timestamp() - strptime(_data_stream['info']['time']['ended']).timestamp() < 3600:
             return _data_stream
         else:
-            move_file(DIRECTORIES['stream'] / FILENAME, DIRECTORIES['stream_archive'] / f"{FILENAME.removesuffix('.json')}_{_data_stream['info']['time']['ended']}.json")
+            move_file(DIRECTORIES['stream'] / FILENAME_DATA_STREAM, DIRECTORIES['stream_archive'] / f"{FILENAME_DATA_STREAM.removesuffix('.json')}_{_data_stream['info']['time']['ended']}.json")
     return create_new_data_stream()
 
 
@@ -420,7 +429,7 @@ def setup_logger(name: str, log_file: str, _log_list: list, level=logging.INFO) 
 
 def stream_stats() -> None:
     try:
-        save_data_stream(data_stream, FILENAME)
+        save_data_stream(data_stream, FILENAME_DATA_STREAM)
         stream_stats = {
             "bits": f"{data_stream['data']['bits']:,}",
             "chat_msg_count": f"{data_stream['data']['chat_msg_count']:,}",
@@ -540,34 +549,13 @@ def update_viewers_avg():
 async def on_message(msg: ChatMessage) -> None:
     try:
         if msg.user.name in BOT_NAMES:
-            if msg.user.name == "fourthwall":
-                if msg.text.startswith("NEW GIVEAWAY"):
-                    gifter, item = msg.text.lstrip("NEW GIVEAWAY - !ENTER TO WIN. ").split(" gifted a ")
-                    item, _ = item.split(" to the chat.")
-                    bot.giveaway['fourthwall'][gifter][item] = {}
-                elif msg.text.startswith("GIVEAWAY WINNER ANNOUNCEMENT!"):
-                    whisper_tried = False
-                    whisper_succeeded = False
-                    winner_id = None
-                    winner, gifter = msg.text.lstrip("GIVEAWAY WINNER ANNOUNCEMENT! @")
-                    gifter, item = gifter.split("'s gift of a ")
-                    item, link = item.split("https://")
-                    link = f"https://{link.rstrip(" to redeem.")}"
-                    response = f"Hey {winner}, you won a {item} via fourthwall! Use {link} and follow the steps to redeem"
-                    if winner in bot.giveaway['fourthwall'][gifter][item].keys():
-                        winner_id = bot.giveaway['fourthwall'][gifter][item][winner]
-                        try:
-                            whisper_tried = True
-                            logger_sim.info(f"WHISPER_TO_{winner}/{winner_id} | {response}")
-                            # await bot.send_whisper(user.id, winner_id, response)
-                            whisper_succeeded = True
-                        except Exception as _error:
-                            logger.error(f"{fortime()}: Error in 'on_message/giveaway-winner' - {_error}")
-                    logger_sim.info(f"CHAT_RESPONSE_TO_{winner}/{winner_id}--TRIED:{whisper_tried}--SUCCEEDED{whisper_succeeded} | {response}")
-            elif msg.user.name == "soundalerts":
-                username, bitties = msg.text.split(" used ")
-                bitties, _ = bitties.split(" Bits")
-                msg_bitties(username, int(bitties))
+            if msg.user.name == "soundalerts":
+                try:
+                    username, bitties = msg.text.split(" used ")
+                    bitties, _ = bitties.split(" Bits")
+                    msg_bitties(username, int(bitties))
+                except Exception as _error:
+                    logger.error(f"{fortime()}: Error in 'on_message/soundalerts_msg' - {_error}\n{msg.text}")
             return
         if msg.user.name != CHAT_ROOM[0]:
             _time = fortime()
@@ -579,6 +567,12 @@ async def on_message(msg: ChatMessage) -> None:
                 logger_sim.info(f"Welcome aboard @{msg.user.display_name}")
             if msg.bits > 0:
                 msg_bitties(msg.user.name, msg.bits)
+            if msg.user.name not in bot.viewers['total'].keys():
+                bot.viewers['total'][msg.user.name] = {
+                    "user_display_name": msg.user.display_name,
+                    "user_id": msg.user.id,
+                    "user_name": msg.user.name
+                }
         elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
@@ -813,8 +807,9 @@ async def run() -> None:
 
 if __name__ == "__main__":
     def shutdown():
-        save_data_stream(data_stream, FILENAME)
-        logger.info(f"{fortime()}: '{FILENAME}' saved!")
+        save_data_stream(data_stream, FILENAME_DATA_STREAM)
+        save_json(bot.viewers['total'], DIRECTORIES['viewers'] / FILENAME_VIEWERS)
+        logger.info(f"{fortime()}: '{FILENAME_DATA_STREAM}' saved!")
         shutdown_logger(log_list)
         clear()  # False)
         sys.exit(0)
@@ -841,6 +836,7 @@ if __name__ == "__main__":
         if auth_dict is not None:
             bot = BotSetup(auth_dict['bot_id'], auth_dict['secret_id'])
             asyncio.run(auth_bot())
+            bot.load_viewers()
             user = asyncio.run(get_auth_user_id())
             data_stream = fetch_data_stream()
             asyncio.run(run())

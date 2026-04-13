@@ -29,7 +29,7 @@ def get_data_path() -> Path:
         if sys.platform == "win32":
             try:
                 from ctypes import windll, create_unicode_buffer
-                buf  = create_unicode_buffer(260)
+                buf = create_unicode_buffer(260)
                 # noinspection PyUnresolvedReferences
                 if windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0:
                     base = Path(buf.value)
@@ -77,9 +77,9 @@ BOT_NAMES = [
     "wizebot"
 ]
 CHAT_ROOM = [
-    # "theravenarmed"
+    "theravenarmed"
     # "theechody"
-    "xboxbaldmara"
+    # "xboxbaldmara"
     # "piousduck83"
     # "rocker_joe"
     # "sissythatgame"

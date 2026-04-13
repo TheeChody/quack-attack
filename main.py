@@ -1,3 +1,8 @@
+# ToDo -------------------------------------------------------------------------------------------------------- #
+#  1; Add tracker for 'fourthwall' giveaway's that if username tries to redeem '!claim', remind them via
+#     whisper/msg (unclear, probably best to chat msg) to use fourthwall redeem link
+#  END OF LIST ------------------------------------------------------------------------------------------------ #
+
 from __future__ import annotations
 import os
 import sys
@@ -9,18 +14,12 @@ import logging
 import subprocess
 from pathlib import Path
 from datetime import datetime
-# from copy import deepcopy as copy
 from twitchAPI.twitch import Twitch
 from typing import Literal, overload
 from twitchAPI.object.api import TwitchUser
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.oauth import UserAuthenticationStorageHelper
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, NoticeEvent, WhisperEvent, JoinEvent, LeftEvent
-
-# ToDo -------------------------------------------------------------------------------------------------------- #
-#  1; Add tracker for 'fourthwall' giveaway's that if username tries to redeem '!claim', remind them via
-#     whisper/msg (unclear, probably best to chat msg) to use fourthwall redeem link
-#  END OF LIST ------------------------------------------------------------------------------------------------ #
 
 
 # ----------------- PATH SETUP  ----------------- #
@@ -30,7 +29,7 @@ def get_data_path() -> Path:
         if sys.platform == "win32":
             try:
                 from ctypes import windll, create_unicode_buffer
-                buf = create_unicode_buffer(260)
+                buf  = create_unicode_buffer(260)
                 # noinspection PyUnresolvedReferences
                 if windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0:
                     base = Path(buf.value)
@@ -389,6 +388,11 @@ def save_data_stream(_data: dict, file_save: str) -> None:
     save_json(_data, DIRECTORIES['stream'] / file_save)
 
 
+def save_data_viewers(_data: dict, file_save: str) -> None:
+    _data = dict(sorted(_data.items(), key=lambda x: x[0]))
+    save_json(_data, DIRECTORIES['viewers'] / file_save)
+
+
 def save_json(_data: dict | None, file_save: Path | str) -> None:
     if _data is None:
         logger.error(f"{fortime()}: _data is None!!!")
@@ -467,17 +471,16 @@ def subbie_tier_check(raw_tier: str) -> str:
 
 def top_bar() -> str:
     try:
-        _time = datetime.now().strftime('%I:%M:%S%p').upper()
         dashes = len(bot.long_dashes())
         dashes_integer = True
         if not (dashes / 2).is_integer():
             dashes_integer = False
-            dashes -= 1
+        _time = datetime.now().strftime(f'%I:%M:%S{'' if dashes_integer else ' '}%p').upper()
         try:
             dashes = int((dashes - len(_time)) / 2)
         except ZeroDivisionError:
             dashes = 0
-        return f"{'-' * dashes}{_time}{'-' * dashes if dashes_integer else '-' * (dashes + 1)}"
+        return f"{'-' * dashes}{_time}{'-' * dashes}"
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_top_bar' - {_error}")
         return bot.long_dashes()
@@ -549,13 +552,14 @@ def update_viewers_avg():
 async def on_message(msg: ChatMessage) -> None:
     try:
         if msg.user.name in BOT_NAMES:
-            if msg.user.name == "soundalerts":
-                try:
-                    username, bitties = msg.text.split(" used ")
-                    bitties, _ = bitties.split(" Bits")
-                    msg_bitties(username, int(bitties))
-                except Exception as _error:
-                    logger.error(f"{fortime()}: Error in 'on_message/soundalerts_msg' - {_error}\n{msg.text}")
+            if CHAT_ROOM[0] == "theravenarmed":
+                if msg.user.name == "soundalerts":
+                    try:
+                        username, bitties = msg.text.split(" used ")
+                        bitties, _ = bitties.split(" Bits")
+                        msg_bitties(username, int(bitties))
+                    except Exception as _error:
+                        logger.error(f"{fortime()}: Error in 'on_message/soundalerts_msg' - {_error}\n{msg.text}")
             return
         if msg.user.name != CHAT_ROOM[0]:
             _time = fortime()
@@ -573,6 +577,7 @@ async def on_message(msg: ChatMessage) -> None:
                     "user_id": msg.user.id,
                     "user_name": msg.user.name
                 }
+                save_data_viewers(bot.viewers['total'], FILENAME_VIEWERS)
         elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
@@ -603,11 +608,6 @@ async def on_notice(event: NoticeEvent) -> None:
 
 async def on_raid(event: dict) -> None:
     try:
-        logger_raid.info(f"{fortime()}: {type(event)}\n{event}\n")
-        for key, value in event.items():
-            logger_raid.info(f"{fortime()}: {key}; {value}")
-        logger_raid.info("")
-
         raider_channel = event['tags']['msg-param-displayName']
         raiders_number = event['tags']['msg-param-viewerCount']
         raiders_number = int(raiders_number)
@@ -809,7 +809,7 @@ if __name__ == "__main__":
     def shutdown():
         save_data_stream(data_stream, FILENAME_DATA_STREAM)
         logger.info(f"{fortime()}: '{FILENAME_DATA_STREAM}' saved!")
-        save_json(bot.viewers['total'], DIRECTORIES['viewers'] / FILENAME_VIEWERS)
+        save_data_viewers(bot.viewers['total'], FILENAME_VIEWERS)
         logger.info(f"{fortime()}: '{FILENAME_VIEWERS}' saved!")
         shutdown_logger(log_list)
         clear(False)

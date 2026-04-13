@@ -78,9 +78,9 @@ BOT_NAMES = [
     "wizebot"
 ]
 CHAT_ROOM = [
-    "theravenarmed"
+    # "theravenarmed"
     # "theechody"
-    # "xboxbaldmara"
+    "xboxbaldmara"
     # "piousduck83"
     # "rocker_joe"
     # "sissythatgame"
@@ -254,7 +254,7 @@ def create_new_data_stream() -> dict:
 def clear(display_top: bool = True) -> None:
     subprocess.run(['cls' if os.name == 'nt' else 'clear'], shell=(os.name == 'nt'))
     if display_top:
-        top_bar()
+        print(top_bar())
 
 
 def fetch_data_stream() -> dict:
@@ -439,7 +439,7 @@ def stream_stats() -> None:
             "subbies_resub": f"{data_stream['data']['subbies']['resub']:,}",
             "subbies_total": f"{total_subbies():,}",
             "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
-            "viewers_avg": f"{round(data_stream['data']['viewers']['avg'])}",
+            "viewers_avg": f"{round(data_stream['data']['viewers']['avg'])}({data_stream['data']['viewers']['avg']:.2f})",
             "viewers_current": f"{data_stream['data']['viewers']['current']:,}",
             "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
             "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
@@ -467,7 +467,7 @@ def subbie_tier_check(raw_tier: str) -> str:
 
 def top_bar() -> str:
     try:
-        _time = datetime.now().strftime('%I:%M:%S %p').upper()
+        _time = datetime.now().strftime('%I:%M:%S%p').upper()
         dashes = len(bot.long_dashes())
         dashes_integer = True
         if not (dashes / 2).is_integer():
@@ -477,7 +477,7 @@ def top_bar() -> str:
             dashes = int((dashes - len(_time)) / 2)
         except ZeroDivisionError:
             dashes = 0
-        return f"{'-' * dashes}{_time}{'-' * dashes if dashes_integer else (dashes + 1)}"
+        return f"{'-' * dashes}{_time}{'-' * dashes if dashes_integer else '-' * (dashes + 1)}"
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_top_bar' - {_error}")
         return bot.long_dashes()
@@ -808,10 +808,11 @@ async def run() -> None:
 if __name__ == "__main__":
     def shutdown():
         save_data_stream(data_stream, FILENAME_DATA_STREAM)
-        save_json(bot.viewers['total'], DIRECTORIES['viewers'] / FILENAME_VIEWERS)
         logger.info(f"{fortime()}: '{FILENAME_DATA_STREAM}' saved!")
+        save_json(bot.viewers['total'], DIRECTORIES['viewers'] / FILENAME_VIEWERS)
+        logger.info(f"{fortime()}: '{FILENAME_VIEWERS}' saved!")
         shutdown_logger(log_list)
-        clear()  # False)
+        clear(False)
         sys.exit(0)
 
     init_time = datetime.now().strftime(FORMAT_TIME)

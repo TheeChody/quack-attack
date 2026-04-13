@@ -17,6 +17,11 @@ from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.oauth import UserAuthenticationStorageHelper
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, NoticeEvent, WhisperEvent, JoinEvent, LeftEvent
 
+# ToDo -------------------------------------------------------------------------------------------------------- #
+#  1; Add tracker for 'fourthwall' giveaway's that catches user_id with username, and if username tries to redeem
+#     '!claim', remind them via whisper/msg (unclear, probably best to chat msg) to use fourthwall redeem link
+#  END OF LIST ------------------------------------------------------------------------------------------------ #
+
 
 # ----------------- PATH SETUP  ----------------- #
 def get_data_path() -> Path:
@@ -58,6 +63,7 @@ for path in DIRECTORIES.values():
 BOT_NAMES = [
     "creatisbot",
     "fossabot",
+    "fourthwall",
     "moobot",
     "nightbot",
     "pokemoncommunitygame",
@@ -534,7 +540,31 @@ def update_viewers_avg():
 async def on_message(msg: ChatMessage) -> None:
     try:
         if msg.user.name in BOT_NAMES:
-            if msg.user.name == "soundalerts":
+            if msg.user.name == "fourthwall":
+                if msg.text.startswith("NEW GIVEAWAY"):
+                    gifter, item = msg.text.lstrip("NEW GIVEAWAY - !ENTER TO WIN. ").split(" gifted a ")
+                    item, _ = item.split(" to the chat.")
+                    bot.giveaway['fourthwall'][gifter][item] = {}
+                elif msg.text.startswith("GIVEAWAY WINNER ANNOUNCEMENT!"):
+                    whisper_tried = False
+                    whisper_succeeded = False
+                    winner_id = None
+                    winner, gifter = msg.text.lstrip("GIVEAWAY WINNER ANNOUNCEMENT! @")
+                    gifter, item = gifter.split("'s gift of a ")
+                    item, link = item.split("https://")
+                    link = f"https://{link.rstrip(" to redeem.")}"
+                    response = f"Hey {winner}, you won a {item} via fourthwall! Use {link} and follow the steps to redeem"
+                    if winner in bot.giveaway['fourthwall'][gifter][item].keys():
+                        winner_id = bot.giveaway['fourthwall'][gifter][item][winner]
+                        try:
+                            whisper_tried = True
+                            logger_sim.info(f"WHISPER_TO_{winner}/{winner_id} | {response}")
+                            # await bot.send_whisper(user.id, winner_id, response)
+                            whisper_succeeded = True
+                        except Exception as _error:
+                            logger.error(f"{fortime()}: Error in 'on_message/giveaway-winner' - {_error}")
+                    logger_sim.info(f"CHAT_RESPONSE_TO_{winner}/{winner_id}--TRIED:{whisper_tried}--SUCCEEDED{whisper_succeeded} | {response}")
+            elif msg.user.name == "soundalerts":
                 username, bitties = msg.text.split(" used ")
                 bitties, _ = bitties.split(" Bits")
                 msg_bitties(username, int(bitties))
@@ -719,7 +749,14 @@ async def run() -> None:
                 pass
             elif user_input.startswith("a_"):
                 keyboard_interrupt = False
-                times_run = int(int(user_input.lstrip("a_")) / 10)
+                user_input = user_input.lstrip("a_")
+                if user_input.isdigit():
+                    user_input = int(user_input)
+                    if user_input < 10:
+                        user_input = 10
+                else:
+                    user_input = 10
+                times_run = int(user_input / 10)
                 for x in range(times_run):
                     try:
                         if keyboard_interrupt:

@@ -1,8 +1,8 @@
 /.archived/
+/.git/
 /.idea/
 /.venv/
 /auth/
 /data/
 /logs/
 /output/
-

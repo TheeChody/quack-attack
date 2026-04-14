@@ -13,7 +13,7 @@ import asyncio
 import logging
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from twitchAPI.twitch import Twitch
 from typing import Literal, overload
 from twitchAPI.object.api import TwitchUser
@@ -24,7 +24,7 @@ from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, NoticeEvent, W
 
 # ----------------- PATH SETUP  ----------------- #
 def get_data_path() -> Path:
-    FOLDER_NAME = "DuckStuff"
+    FOLDER_NAME = "QuackAttack"
     if getattr(sys, 'frozen', False):
         if sys.platform == "win32":
             try:
@@ -77,8 +77,8 @@ BOT_NAMES = [
     "wizebot"
 ]
 CHAT_ROOM = [
-    "theravenarmed"
-    # "theechody"
+    "theechody"
+    # "theravenarmed"
     # "xboxbaldmara"
     # "piousduck83"
     # "rocker_joe"
@@ -195,6 +195,43 @@ async def auth_bot() -> None:
     logger.info(f"{fortime()}: Bot Authenticated Successfully!\n{bot.long_dashes()}")
 
 
+def bar_bottom() -> str:
+    try:
+        dashes = len(bot.long_dashes())
+        dashes_integer = True
+        if not (dashes / 2).is_integer():
+            dashes_integer = False
+            dashes -= 1
+        _time_now = datetime.now().timestamp()
+        _time_started = datetime.strptime(data_stream['info']['time']['started'], FORMAT_TIME).timestamp()
+        _time_str = f"{timedelta(seconds=int(_time_now - _time_started))}"
+        try:
+            dashes = int((dashes - len(_time_str)) / 2)
+        except ZeroDivisionError:
+            dashes = 0
+        return f"{'-' * dashes}{_time_str}{'-' * dashes if dashes_integer else '-' * (dashes + 1)}"
+    except Exception as _error:
+        logger.error(f"{fortime()}: ERROR 'on_bar_bottom' - {_error}")
+        return bot.long_dashes()
+
+
+def bar_top() -> str:
+    try:
+        dashes = len(bot.long_dashes())
+        dashes_integer = True
+        if not (dashes / 2).is_integer():
+            dashes_integer = False
+        _time_str = datetime.now().strftime(f'%I:%M:%S{'' if dashes_integer else ' '}%p').upper()
+        try:
+            dashes = int((dashes - len(_time_str)) / 2)
+        except ZeroDivisionError:
+            dashes = 0
+        return f"{'-' * dashes}{_time_str}{'-' * dashes}"
+    except Exception as _error:
+        logger.error(f"{fortime()}: ERROR 'on_bar_top' - {_error}")
+        return bot.long_dashes()
+
+
 def check_db_auth() -> dict | None:
     def fetch_stock_auth() -> dict | None:
         return {
@@ -253,7 +290,7 @@ def create_new_data_stream() -> dict:
 def clear(display_top: bool = True) -> None:
     subprocess.run(['cls' if os.name == 'nt' else 'clear'], shell=(os.name == 'nt'))
     if display_top:
-        print(top_bar())
+        print(bar_top())
 
 
 def fetch_data_stream() -> dict:
@@ -318,6 +355,7 @@ def print_stream_stats(stream_stats: dict) -> None:
     sorted_stats = dict(sorted(stream_stats.items()))
     for key, value in sorted_stats.items():
         print(f"{print_max_length(key.replace('_', ' ').replace('-', '/').title(), length)}: {value}")
+    print(bar_bottom())
 
 
 def read_file(
@@ -435,16 +473,16 @@ def stream_stats() -> None:
     try:
         save_data_stream(data_stream, FILENAME_DATA_STREAM)
         stream_stats = {
-            "bits": f"{data_stream['data']['bits']:,}",
+            "bitties": f"{data_stream['data']['bits']:,}",
             "chat_msg_count": f"{data_stream['data']['chat_msg_count']:,}",
             "chat_new_viewer": f"{data_stream['data']['chatters_new']:,}",
+            "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
             "subbies_gifted": f"{data_stream['data']['subbies']['gifted']:,}",
             "subbies_new": f"{data_stream['data']['subbies']['new']:,}",
             "subbies_resub": f"{data_stream['data']['subbies']['resub']:,}",
             "subbies_total": f"{total_subbies():,}",
-            "raids-viewers": f"{data_stream['data']['raids']['total']:,}/{data_stream['data']['raids']['viewers']:,}",
-            "viewers_avg": f"{round(data_stream['data']['viewers']['avg'])}({data_stream['data']['viewers']['avg']:.2f})",
-            "viewers_current": f"{data_stream['data']['viewers']['current']:,}",
+            "viewers": f"{data_stream['data']['viewers']['current']:,}",
+            "viewers_avg": f"{data_stream['data']['viewers']['avg']:,.2f}",
             "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
             "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
         }
@@ -467,23 +505,6 @@ def subbie_tier_check(raw_tier: str) -> str:
         return "Tier 2"
     else:
         return "Tier 3"
-
-
-def top_bar() -> str:
-    try:
-        dashes = len(bot.long_dashes())
-        dashes_integer = True
-        if not (dashes / 2).is_integer():
-            dashes_integer = False
-        _time = datetime.now().strftime(f'%I:%M:%S{'' if dashes_integer else ' '}%p').upper()
-        try:
-            dashes = int((dashes - len(_time)) / 2)
-        except ZeroDivisionError:
-            dashes = 0
-        return f"{'-' * dashes}{_time}{'-' * dashes}"
-    except Exception as _error:
-        logger.error(f"{fortime()}: ERROR 'on_top_bar' - {_error}")
-        return bot.long_dashes()
 
 
 def total_subbies() -> int:
@@ -735,8 +756,7 @@ async def run() -> None:
         clear()
         try:
             stream_stats()
-            user_input = input(f"{bot.long_dashes()}\n"
-                               f"Enter 1 To View Names of Users\n"
+            user_input = input(f"Enter 1 To View Names of Users\n"
                                f"Enter 0 To Exit\n"
                                f"Enter Nothing To Refresh\n")
             if user_input == "":
@@ -751,14 +771,15 @@ async def run() -> None:
                 else:
                     user_input = 10
                 times_run = int(user_input / 10)
+                start_time = time.perf_counter()
                 for x in range(times_run):
                     try:
                         if keyboard_interrupt:
                             break
                         clear()
                         stream_stats()
-                        print(f"{bot.long_dashes()}\nRun {x + 1} out of {times_run}")
-                        await asyncio.sleep(10)
+                        print(f"Refresh {x + 1} out of {times_run}")
+                        await asyncio.sleep(10 - ((time.perf_counter() - start_time) % 10))
                     except KeyboardInterrupt:
                         keyboard_interrupt = True
                         continue
@@ -777,7 +798,7 @@ async def run() -> None:
                     clear()
                     for username in sorted(bot.viewers['in_chat'][CHAT_ROOM[0]]):
                         print(username)
-                    print(f"{bot.long_dashes()}\nTotal; {fetch_viewers_current():,}")
+                    print(f"{bar_bottom()}\nTotal; {fetch_viewers_current():,}")
                     input("Hit enter to continue...")
                 elif user_input == 69:
                     input("haha, funny sex number")

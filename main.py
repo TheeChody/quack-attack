@@ -77,8 +77,8 @@ BOT_NAMES = [
     "wizebot"
 ]
 CHAT_ROOM = [
-    "theechody"
-    # "theravenarmed"
+    # "theechody"
+    "theravenarmed"
     # "xboxbaldmara"
     # "piousduck83"
     # "rocker_joe"

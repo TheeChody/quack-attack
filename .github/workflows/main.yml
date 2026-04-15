@@ -24,9 +24,11 @@ jobs:
         pip install pyinstaller
         pip install -r requirements.txt
     
-    - name: Build executable
+    - name: Build exe-onedir
       # run: pyinstaller --noconfirm --onedir --console --name "QuackAttack" --clean --log-level "WARN" main.py
-      # run: pyinstaller --noconfirm --onedir --console --icon "icon/icon.ico" --name "QuackAttack" --clean --log-level "WARN" main.py
+      run: pyinstaller --noconfirm --onedir --console --icon "icon/icon.ico" --name "QuackAttack" --clean --log-level "WARN" main.py
+    
+    - name: Build exe-onefile
       # run: pyinstaller --noconfirm --onefile --console --name "QuackAttack" --clean --log-level "WARN" main.py
       run: pyinstaller --noconfirm --onefile --console --icon "icon/icon.ico" --name "QuackAttack" --clean --log-level "WARN" main.py
     

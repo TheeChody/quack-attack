@@ -19,7 +19,7 @@ from typing import Literal, overload
 from twitchAPI.object.api import TwitchUser
 from twitchAPI.type import AuthScope, ChatEvent
 from twitchAPI.oauth import UserAuthenticationStorageHelper
-from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, NoticeEvent, WhisperEvent, JoinEvent, LeftEvent
+from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, JoinEvent, LeftEvent, NoticeEvent  #, WhisperEvent
 
 
 # ----------------- PATH SETUP  ----------------- #
@@ -99,6 +99,45 @@ EMOTES = {
 }
 FORMAT_TIME = "%Y-%m-%d--%H-%M-%S"
 HYPE = "!hyp"
+MESSAGES = {
+    "bits": {
+        "100-999": [
+            "Thanks to @{chatter} for the {bitties} BITS"
+        ],
+        "1000": [
+            "@{chatter} has uncovered a chest of pure gold of {bitties:,} bits! Mark the map, we've struck riches."
+        ]
+    },
+    "raid": {
+        "1-49": [
+            " WELCOME TO THE CREW {raiders_number} {raiders} OF @{raider_channel} "
+        ],
+        "50-99": [
+            f"{EMOTES['raid']['rave']} {EMOTES['hype']['parrot']} {EMOTES['hype']['skelly']} {EMOTES['flag']['roll']}" +
+            " WELCOME TO THE CREW {raiders_number} {raiders} OF @{raider_channel} " +
+            f"{EMOTES['flag']['roll']} {EMOTES['hype']['skelly']} {EMOTES['hype']['parrot']} {EMOTES['raid']['rave']}"
+        ],
+        "100": [
+            " WELCOME TO THE CREW {raiders_number:,} {raiders} OF @{raider_channel} "
+        ]
+    },
+    "subs_gift": {
+        "1-4": [
+            "Thanks to @{chatter} for the generous {subbies} GIFTED {subs}!"
+        ],
+        "5": [
+            "AHOY! A mighty thanks to @{chatter} for the generous {subbies:,} GIFTED {subs}! Ye be keepin’ this ship afloat and the crew well-fed—raise the sails for this legend!"
+        ]
+    },
+    "subs_direct": {
+        "new": [
+            "@{chatter} with the BRAND NEW {tier} SUB!"
+        ],
+        "resub": [
+            "@{chatter} for the {total_time} MONTH {tier} RESUB!!"
+        ]
+    }
+}
 
 # ----------------- FILES  ----------------- #
 AUTH_JSON = DIRECTORIES['auth'] / "auth_info.json"
@@ -293,6 +332,18 @@ def clear(display_top: bool = True) -> None:
         print(bar_top())
 
 
+def define_key(keys: list, value: int) -> str:
+    for key in keys:
+        if "-" in key:
+            k_value1, k_value2 = key.split("-")
+            if int(k_value1) <= value <= int(k_value2):
+                return key
+        else:
+            if value >= int(key):
+                return key
+    return keys[0]
+
+
 def fetch_data_stream() -> dict:
     if FILENAME_DATA_STREAM in os.listdir(DIRECTORIES['stream']):
         _data_stream = read_file(DIRECTORIES['stream'] / FILENAME_DATA_STREAM, DictOptions(json=True))
@@ -337,13 +388,10 @@ def move_file(old_path: Path, new_path: Path) -> None:
 
 
 def msg_bitties(username: str, bitties: int) -> None:
-    bit_msgs = [
-        "{} for cheering {} bits!!",
-        "{} has uncovered a chest of pure gold of {} bits! Mark the map, we've struck riches!!"
-    ]
     data_stream['data']['bits'] += bitties
-    response: str = random.choice(bit_msgs)
-    logger_sim.info(f"{HYPE} {response.format(f"@{username}", f"{bitties:,}")}")
+    key = define_key(list(MESSAGES['bits'].keys()), bitties)
+    response: str = random.choice(MESSAGES['bits'][key])
+    logger_sim.info(response.format(chatter=username, bitties=bitties))
 
 
 def print_max_length(_str: str, length: int) -> str:
@@ -420,15 +468,14 @@ def read_file(
         return error_msg
 
 
-def save_data_stream(_data: dict, file_save: str) -> None:
+def save_data_stream(_data: dict) -> None:
     _data = update_viewers(_data)
     _data['info']['time']['ended'] = datetime.strftime(datetime.now(), FORMAT_TIME)
-    save_json(_data, DIRECTORIES['stream'] / file_save)
+    save_json(_data, DIRECTORIES['stream'] / FILENAME_DATA_STREAM)
 
 
-def save_data_viewers(_data: dict, file_save: str) -> None:
-    _data = dict(sorted(_data.items(), key=lambda x: x[0]))
-    save_json(_data, DIRECTORIES['viewers'] / file_save)
+def save_data_viewers(_data: dict) -> None:
+    save_json(dict(sorted(_data.items(), key=lambda x: x[1])), DIRECTORIES['viewers'] / FILENAME_VIEWERS)
 
 
 def save_json(_data: dict | None, file_save: Path | str) -> None:
@@ -471,7 +518,7 @@ def setup_logger(name: str, log_file: str, _log_list: list, level=logging.INFO) 
 
 def stream_stats() -> None:
     try:
-        save_data_stream(data_stream, FILENAME_DATA_STREAM)
+        save_data_stream(data_stream)
         stream_stats = {
             "bitties": f"{data_stream['data']['bits']:,}",
             "chat_msg_count": f"{data_stream['data']['chat_msg_count']:,}",
@@ -578,10 +625,13 @@ async def on_message(msg: ChatMessage) -> None:
                     try:
                         username, bitties = msg.text.split(" used ")
                         bitties, _ = bitties.split(" Bits")
-                        msg_bitties(username, int(bitties))
+                        bitties = int(bitties)
+                        if bitties >= 100:
+                            msg_bitties(username, bitties)
                     except Exception as _error:
                         logger.error(f"{fortime()}: Error in 'on_message/soundalerts_msg' - {_error}\n{msg.text}")
             return
+
         if msg.user.name != CHAT_ROOM[0]:
             _time = fortime()
             data_stream['data']['chat_msg_count'] += 1
@@ -590,15 +640,18 @@ async def on_message(msg: ChatMessage) -> None:
             if msg.first:
                 data_stream['data']['chatters_new'] += 1
                 logger_sim.info(f"Welcome aboard @{msg.user.display_name}")
-            if msg.bits > 0:
+
+            if msg.bits >= 100:
                 msg_bitties(msg.user.name, msg.bits)
-            if msg.user.name not in bot.viewers['total'].keys():
-                bot.viewers['total'][msg.user.name] = {
-                    "user_display_name": msg.user.display_name,
-                    "user_id": msg.user.id,
-                    "user_name": msg.user.name
+
+            if msg.user.id not in bot.viewers['total'].keys():
+                bot.viewers['total'][msg.user.id] = {
+                    "username": msg.user.display_name
                 }
-                save_data_viewers(bot.viewers['total'], FILENAME_VIEWERS)
+                save_data_viewers(bot.viewers['total'])
+            else:
+                if bot.viewers['total'][msg.user.id]['username'] != msg.user.display_name:
+                    bot.viewers['total'][msg.user.id]['username'] = msg.user.display_name
         elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
@@ -609,9 +662,11 @@ async def on_message(msg: ChatMessage) -> None:
                 number_subs = 1
             else:
                 logger.error(f"{fortime()}: Error in 'on_message/elif msg.user.name == CHAT_ROOM[0]/number_subs can't be figured' -- {number_subs}")
-                number_subs = 0
+                return
             data_stream['data']['subbies']['gifted'] += number_subs
-            logger_sim.info(f"{HYPE} @{username} for the {number_subs:,} GIFT SUB{"S" if number_subs > 1 else ""}!")
+            key = define_key(list(MESSAGES['subs_gift'].keys()), number_subs)
+            response: str = random.choice(MESSAGES['subs_gift'][key])
+            logger_sim.info(response.format(chatter=username, subbies=number_subs, subs="SUBS" if number_subs > 1 else "SUB"))
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_message' - {_error}")
         return
@@ -634,7 +689,9 @@ async def on_raid(event: dict) -> None:
         raiders_number = int(raiders_number)
         data_stream['data']['raids']['total'] += 1
         data_stream['data']['raids']['viewers'] += raiders_number
-        logger_sim.info(f"{EMOTES['raid']['rave']} {EMOTES['hype']['parrot']} {EMOTES['hype']['skelly']} {EMOTES['flag']['roll']} WELCOME TO THE CREW {raiders_number:,} RAIDER{"S" if raiders_number > 1 else ""} OF @{raider_channel} {EMOTES['flag']['roll']} {EMOTES['hype']['skelly']} {EMOTES['hype']['parrot']} {EMOTES['raid']['rave']}")
+        key = define_key(list(MESSAGES['raids'].keys()), raiders_number)
+        response: str = random.choice(MESSAGES['raids'][key])
+        logger_sim.info(response.format(raider_channel=raider_channel, raiders_number=raiders_number, raiders="RAIDERS" if raiders_number > 1 else "RAIDER"))
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_raid' - {_error}")
         return
@@ -659,8 +716,10 @@ async def on_sub(sub: ChatSub) -> None:
         logger_sub.info(f"{_time}: sub plan; {sub.sub_plan}\nsub plan name; {sub.sub_plan_name}\nsub type; {sub.sub_type}\nsub msg; {sub.sub_message}\nsys msg; {sub.system_message}")
         if sub.sub_type == "sub":
             try:
+                username = sub.system_message.split('\\s')[0]
                 data_stream['data']['subbies']['new'] += 1
-                logger_sim.info(f"{HYPE} @{sub.system_message.split('\\s')[0]} for the BRAND NEW {subbie_tier_check(sub.sub_plan).upper()} SUB!!")
+                response: str = random.choice(MESSAGES['subs_direct']['new'])
+                logger_sim.info(response.format(chatter=username, tier=subbie_tier_check(sub.sub_plan).upper()))
             except Exception as _error:
                 logger.error(f"{fortime()}: ERROR 'on_sub/sub' - {_error}")
                 return
@@ -674,14 +733,15 @@ async def on_sub(sub: ChatSub) -> None:
                     total_sub_time = int(sys_msg[7])
                 else:
                     total_sub_time = int(sys_msg[8])
-                if len(sys_msg) > 10:
-                    if sub.sub_plan == "Prime":
-                        streak_sub_time = int(sys_msg[12])
-                    else:
-                        streak_sub_time = int(sys_msg[13])
-                else:
-                    streak_sub_time = 0
-                logger_sim.info(f"{HYPE} @{username} for the {subbie_tier_check(sub.sub_plan)} RESUB!!{f" @{username} has been subbed for {total_sub_time:,} Months{f", currently on a {streak_sub_time} Month Streak!!" if streak_sub_time > 0 else "!!"}" if total_sub_time > 0 else ""}")
+                # if len(sys_msg) > 10:
+                #     if sub.sub_plan == "Prime":
+                #         streak_sub_time = int(sys_msg[12])
+                #     else:
+                #         streak_sub_time = int(sys_msg[13])
+                # else:
+                #     streak_sub_time = 0
+                response: str = random.choice(MESSAGES['subs_direct']['resub'])
+                logger_sim.info(response.format(chatter=username, total_time=total_sub_time, tier=subbie_tier_check(sub.sub_plan)))
             except Exception as _error:
                 logger.error(f"{fortime()}: ERROR 'on_sub/resub' - {_error}")
                 return
@@ -722,9 +782,10 @@ async def on_user_left(event: LeftEvent) -> None:
         return
 
 
-async def on_whisper(event: WhisperEvent) -> None:
+# async def on_whisper(event: WhisperEvent) -> None:
+async def on_whisper() -> None:
     try:
-        logger_whisper.info(f"{fortime()}: {event.message}")
+        return
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_whisper' - {_error}")
         return
@@ -733,6 +794,11 @@ async def on_whisper(event: WhisperEvent) -> None:
 # ----------------- MAIN BOT LOOP ----------------- #
 async def run() -> None:
     async def shutdown():
+        save_data_stream(data_stream)
+        logger.info(f"{fortime()}: '{FILENAME_DATA_STREAM}' saved!")
+        save_data_viewers(bot.viewers['total'])
+        logger.info(f"{fortime()}: '{FILENAME_VIEWERS}' saved!")
+        await asyncio.sleep(1)
         chat.stop()
         logger.info(f"{bot.long_dashes()}\n{fortime()}: Chat Stopped!\n{bot.long_dashes()}")
         await asyncio.sleep(1)
@@ -827,11 +893,7 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
-    def shutdown():
-        save_data_stream(data_stream, FILENAME_DATA_STREAM)
-        logger.info(f"{fortime()}: '{FILENAME_DATA_STREAM}' saved!")
-        save_data_viewers(bot.viewers['total'], FILENAME_VIEWERS)
-        logger.info(f"{fortime()}: '{FILENAME_VIEWERS}' saved!")
+    def shutdown() -> None:
         shutdown_logger(log_list)
         clear(False)
         sys.exit(0)

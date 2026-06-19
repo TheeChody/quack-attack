@@ -138,6 +138,7 @@ MESSAGES = {
         ]
     }
 }
+STREAM_WARMUP = 600
 
 # ----------------- FILES  ----------------- #
 AUTH_JSON = DIRECTORIES['auth'] / "auth_info.json"
@@ -475,7 +476,8 @@ def save_data_stream(_data: dict) -> None:
 
 
 def save_data_viewers(_data: dict) -> None:
-    save_json(dict(sorted(_data.items(), key=lambda x: x[1])), DIRECTORIES['viewers'] / FILENAME_VIEWERS)
+    _data_sorted = dict(sorted(_data.items(), key=lambda x: str(x[1].values()).lower()))
+    save_json(_data_sorted, DIRECTORIES['viewers'] / FILENAME_VIEWERS)
 
 
 def save_json(_data: dict | None, file_save: Path | str) -> None:
@@ -487,15 +489,19 @@ def save_json(_data: dict | None, file_save: Path | str) -> None:
 
 
 def shutdown_logger(_log_list: list) -> None:
+    logger.info(f"{bot.long_dashes()}\n{fortime()}: Shutting down logger")
     logging.shutdown()
     for entry in _log_list:
         try:
             os.rename(DIRECTORIES['logs'] / entry, DIRECTORIES['logs_archive'] / entry)
             print(f"{entry} moved to archives..")
+            time.sleep(0.25)
         except Exception as _error:
             print(_error)
             time.sleep(5)
             continue
+    print(f"{bot.long_dashes()}\n{fortime()}: Finished shutting down logger")
+    time.sleep(1)
 
 
 def setup_logger(name: str, log_file: str, _log_list: list, level=logging.INFO) -> logging.Logger:
@@ -529,7 +535,8 @@ def stream_stats() -> None:
             "subbies_resub": f"{data_stream['data']['subbies']['resub']:,}",
             "subbies_total": f"{total_subbies():,}",
             "viewers": f"{data_stream['data']['viewers']['current']:,}",
-            "viewers_avg": f"{data_stream['data']['viewers']['avg']:,.2f}",
+            # "viewers_avg": f"{data_stream['data']['viewers']['avg']:,.2f}",
+            "viewers_avg": f"{round(data_stream['data']['viewers']['avg'])}",
             "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
             "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
         }
@@ -594,26 +601,37 @@ def update_viewers(_data: dict) -> dict:
     viewers_current = fetch_viewers_current()
 
     _data['data']['viewers']['current'] = viewers_current
-    if now_time.timestamp() - strptime(_data['info']['time']['started']).timestamp() < 900:
-        # _data['data']['viewers']['min'] = viewers_current if viewers_current > _data['data']['viewers']['min'] else _data['data']['viewers']['min']
+    if now_time.timestamp() - strptime(_data['info']['time']['started']).timestamp() < STREAM_WARMUP:
         _data['data']['viewers']['min'] = viewers_current
     else:
         _data['data']['viewers']['min'] = _data['data']['viewers']['min'] if _data['data']['viewers']['min'] < viewers_current else viewers_current
     _data['data']['viewers']['max'] = _data['data']['viewers']['max'] if _data['data']['viewers']['max'] > viewers_current else viewers_current
 
-    total_time = now_time.timestamp() - strptime(_data['info']['time']['started']).timestamp()
-    weighted_sum = 0.0
-    for i, (ts, viewers) in enumerate(_data['viewers']):
-        next_ts = _data['viewers'][i + 1][0] if i + 1 < len(_data['viewers']) else now_time.strftime(FORMAT_TIME)
-        duration = strptime(next_ts).timestamp() - strptime(ts).timestamp()
-        weighted_sum += viewers * duration
+    if now_time.timestamp() - strptime(_data['info']['time']['started']).timestamp() > STREAM_WARMUP:
+        total_time = now_time.timestamp() - (strptime(_data['info']['time']['started']).timestamp() + STREAM_WARMUP)
+        logger_whisper.info(f"{fortime()}: total_time; {total_time}")
+        weighted_sum = 0.0
+        for i, (ts, viewers) in enumerate(_data['viewers']):
+            next_ts = _data['viewers'][i + 1][0] if i + 1 < len(_data['viewers']) else now_time.strftime(FORMAT_TIME)
+            duration = strptime(next_ts).timestamp() - strptime(ts).timestamp()
+            weighted_sum += viewers * duration
 
-    _data['data']['viewers']['avg'] = weighted_sum / total_time
+        _data['data']['viewers']['avg'] = weighted_sum / total_time
+
     return _data
 
 
 def update_viewers_avg():
-    data_stream['viewers'].append((datetime.now().strftime(FORMAT_TIME), fetch_viewers_current()))
+    now_time = datetime.now()
+    viewers = fetch_viewers_current()
+    time_started_timestamp = strptime(data_stream['info']['time']['started']).timestamp()
+    if now_time.timestamp() - strptime(data_stream['info']['time']['started']).timestamp() < STREAM_WARMUP:
+        append_time = datetime.fromtimestamp(now_time.timestamp() + (STREAM_WARMUP - abs(now_time.timestamp() - time_started_timestamp)))
+        append_time2 = datetime.fromtimestamp(time_started_timestamp + STREAM_WARMUP)
+        logger_whisper.info(f"{fortime()}: append_time(2)/viewers; {append_time.strftime(FORMAT_TIME)}({append_time2.strftime(FORMAT_TIME)})/{viewers}")
+    else:
+        append_time = now_time
+    data_stream['viewers'].append((append_time.strftime(FORMAT_TIME), viewers))
 
 
 # ----------------- MAIN BOT FUNCTIONS ----------------- #
@@ -652,6 +670,7 @@ async def on_message(msg: ChatMessage) -> None:
             else:
                 if bot.viewers['total'][msg.user.id]['username'] != msg.user.display_name:
                     bot.viewers['total'][msg.user.id]['username'] = msg.user.display_name
+                    save_data_viewers(bot.viewers['total'])
         elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
@@ -702,7 +721,7 @@ async def on_ready(event: EventData) -> None:
         username = CHAT_ROOM[0]
         await event.chat.join_room(username)
         bot.viewers['in_chat'][username] = [user.login]
-        data_stream['viewers'].append((datetime.now().strftime(FORMAT_TIME), 1))
+        update_viewers_avg()
         logger.info(f"{fortime()}: Joined {username} chat!\n{bot.long_dashes()}")
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_ready' - {_error}")
@@ -795,9 +814,10 @@ async def on_whisper() -> None:
 async def run() -> None:
     async def shutdown():
         save_data_stream(data_stream)
-        logger.info(f"{fortime()}: '{FILENAME_DATA_STREAM}' saved!")
+        logger.info(f"{bot.long_dashes()}\n{fortime()}: '{FILENAME_DATA_STREAM}' saved!")
+        await asyncio.sleep(1)
         save_data_viewers(bot.viewers['total'])
-        logger.info(f"{fortime()}: '{FILENAME_VIEWERS}' saved!")
+        logger.info(f"{bot.long_dashes()}\n{fortime()}: '{FILENAME_VIEWERS}' saved!")
         await asyncio.sleep(1)
         chat.stop()
         logger.info(f"{bot.long_dashes()}\n{fortime()}: Chat Stopped!\n{bot.long_dashes()}")

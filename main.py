@@ -476,8 +476,7 @@ def save_data_stream(_data: dict) -> None:
 
 
 def save_data_viewers(_data: dict) -> None:
-    _data_sorted = dict(sorted(_data.items(), key=lambda x: str(x[1].values()).lower()))
-    save_json(_data_sorted, DIRECTORIES['viewers'] / FILENAME_VIEWERS)
+    save_json(dict(sorted(_data.items(), key=lambda x: str(x[1].values()).lower())), DIRECTORIES['viewers'] / FILENAME_VIEWERS)
 
 
 def save_json(_data: dict | None, file_save: Path | str) -> None:
@@ -626,9 +625,8 @@ def update_viewers_avg():
     viewers = fetch_viewers_current()
     time_started_timestamp = strptime(data_stream['info']['time']['started']).timestamp()
     if now_time.timestamp() - strptime(data_stream['info']['time']['started']).timestamp() < STREAM_WARMUP:
-        append_time = datetime.fromtimestamp(now_time.timestamp() + (STREAM_WARMUP - abs(now_time.timestamp() - time_started_timestamp)))
-        append_time2 = datetime.fromtimestamp(time_started_timestamp + STREAM_WARMUP)
-        logger_whisper.info(f"{fortime()}: append_time(2)/viewers; {append_time.strftime(FORMAT_TIME)}({append_time2.strftime(FORMAT_TIME)})/{viewers}")
+        append_time = datetime.fromtimestamp(time_started_timestamp + STREAM_WARMUP)
+        logger_whisper.info(f"{fortime()}: append_time/viewers; {append_time.strftime(FORMAT_TIME)}/{viewers}")
     else:
         append_time = now_time
     data_stream['viewers'].append((append_time.strftime(FORMAT_TIME), viewers))

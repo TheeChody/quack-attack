@@ -108,7 +108,7 @@ MESSAGES = {
             "@{chatter} has uncovered a chest of pure gold of {bitties:,} bits! Mark the map, we've struck riches."
         ]
     },
-    "raid": {
+    "raids": {
         "1-49": [
             " WELCOME TO THE CREW {raiders_number} {raiders} OF @{raider_channel} "
         ],
@@ -534,8 +534,8 @@ def stream_stats() -> None:
             "subbies_resub": f"{data_stream['data']['subbies']['resub']:,}",
             "subbies_total": f"{total_subbies():,}",
             "viewers": f"{data_stream['data']['viewers']['current']:,}",
-            # "viewers_avg": f"{data_stream['data']['viewers']['avg']:,.2f}",
-            "viewers_avg": f"{round(data_stream['data']['viewers']['avg'])}",
+            "viewers_avg": f"{data_stream['data']['viewers']['avg']:,.2f}",
+            # "viewers_avg": f"{round(data_stream['data']['viewers']['avg'])}({data_stream['data']['viewers']['avg']:,.2f})",
             "viewers_max": f"{data_stream['data']['viewers']['max']:,}",
             "viewers_min": f"{data_stream['data']['viewers']['min']:,}",
         }

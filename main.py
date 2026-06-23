@@ -669,7 +669,7 @@ async def on_message(msg: ChatMessage) -> None:
                 if bot.viewers['total'][msg.user.id]['username'] != msg.user.display_name:
                     bot.viewers['total'][msg.user.id]['username'] = msg.user.display_name
                     save_data_viewers(bot.viewers['total'])
-        elif msg.user.name == "theravenarmed" and "gifting" in msg.text:
+        elif msg.user.name == CHAT_ROOM[0] == "theravenarmed" and "gifting" in msg.text:
             username, text = msg.text.split(" just earned ")
             _, number_subs = text.split(" Shillings for gifting ")
             number_subs, _ = number_subs.split(" subscription")
@@ -777,7 +777,7 @@ async def on_user_join(event: JoinEvent) -> None:
             bot.viewers['in_chat'][streamer_name].append(chatter_name)
             logger_viewers.info(f"{fortime()}: {chatter_name} has joined the chat! {fetch_viewers_current():,} viewers present!")
             update_viewers_avg()
-            update_viewers(data_stream)
+            # update_viewers(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_join' - {_error}")
         return
@@ -793,7 +793,7 @@ async def on_user_left(event: LeftEvent) -> None:
             bot.viewers['in_chat'][streamer_name].remove(chatter_name)
             logger_viewers.info(f"{fortime()}: {event.user_name} has left the chat! {fetch_viewers_current():,} viewers present!")
             update_viewers_avg()
-            update_viewers(data_stream)
+            # update_viewers(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_left' - {_error}")
         return
@@ -818,10 +818,10 @@ async def run() -> None:
         logger.info(f"{bot.long_dashes()}\n{fortime()}: '{FILENAME_VIEWERS}' saved!")
         await asyncio.sleep(1)
         chat.stop()
-        logger.info(f"{bot.long_dashes()}\n{fortime()}: Chat Stopped!\n{bot.long_dashes()}")
+        logger.info(f"{bot.long_dashes()}\n{fortime()}: Chat Stopped!")
         await asyncio.sleep(1)
         await bot.close()
-        logger.info(f"{fortime()}: Bot Closed!\n{bot.long_dashes()}")
+        logger.info(f"{bot.long_dashes()}\n{fortime()}: Bot Closed!")
         await asyncio.sleep(1)
 
     chat = await Chat(bot)
@@ -850,20 +850,19 @@ async def run() -> None:
                 user_input = user_input.lstrip("a_")
                 if user_input.isdigit():
                     user_input = int(user_input)
-                    if user_input < 10:
-                        user_input = 10
+                    if user_input < 1:
+                        user_input = 1
                 else:
-                    user_input = 10
-                times_run = int(user_input / 10)
+                    user_input = 1
                 start_time = time.perf_counter()
-                for x in range(times_run):
+                for x in range(user_input):
                     try:
                         if keyboard_interrupt:
                             break
                         clear()
                         stream_stats()
-                        print(f"Refresh {x + 1} out of {times_run}")
-                        await asyncio.sleep(10 - ((time.perf_counter() - start_time) % 10))
+                        print(f"Refresh {x + 1} out of {user_input}")
+                        await asyncio.sleep(60 - ((time.perf_counter() - start_time) % 60))
                     except KeyboardInterrupt:
                         keyboard_interrupt = True
                         continue

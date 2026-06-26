@@ -3,7 +3,7 @@
 #     whisper/msg (unclear, probably best to chat msg) to use fourthwall redeem link
 #  END OF LIST ------------------------------------------------------------------------------------------------ #
 
-from __future__ import annotations
+# from __future__ import annotations
 import os
 import sys
 import json
@@ -36,7 +36,14 @@ def get_data_path() -> Path:
                 else:
                     base = Path(os.environ["USERPROFILE"]) / "Documents"
             except Exception as e:
-                logger.error(f"{fortime()}: Error in 'get_data_path' -- {e}")
+                temp_path = Path(__file__).parent
+                temp_filename = "pathing_error.txt"
+                temp_together = Path.joinpath(temp_path, temp_filename)
+                pause_time = 20
+                with open(temp_together, "w", encoding="utf-8") as f:
+                    f.write(f"Error in 'get_data_path' -- {e}")
+                print(f"ERROR IN PATH_SETUP -> SEE '{temp_together}' FOR DETAILS!!\n\nAttempting to continue in {pause_time} seconds")
+                time.sleep(pause_time)
                 base = Path(os.environ["USERPROFILE"]) / "Documents"
         else:
             base = Path.home() / "Documents"
@@ -97,6 +104,12 @@ EMOTES = {
         "rave": "therav27RaidRave"
     }
 }
+EMOTES_MESSAGES = {
+    "raids": [
+        [EMOTES['raid']['rave'], EMOTES['hype']['parrot'], EMOTES['hype']['skelly'], EMOTES['flag']['roll']],
+        [EMOTES['raid']['rave'], EMOTES['hype']['skelly'], EMOTES['flag']['roll'], EMOTES['hype']['parrot']],
+    ]
+}
 FORMAT_TIME = "%Y-%m-%d--%H-%M-%S"
 HYPE = "!hyp"
 MESSAGES = {
@@ -110,15 +123,13 @@ MESSAGES = {
     },
     "raids": {
         "1-49": [
-            " WELCOME TO THE CREW {raiders_number} {raiders} OF @{raider_channel} "
+            "WELCOME TO THE CREW {raiders_number} {raiders} OF @{raider_channel}"
         ],
         "50-99": [
-            f"{EMOTES['raid']['rave']} {EMOTES['hype']['parrot']} {EMOTES['hype']['skelly']} {EMOTES['flag']['roll']}" +
-            " WELCOME TO THE CREW {raiders_number} {raiders} OF @{raider_channel} " +
-            f"{EMOTES['flag']['roll']} {EMOTES['hype']['skelly']} {EMOTES['hype']['parrot']} {EMOTES['raid']['rave']}"
+             "WELCOME TO THE CREW {raiders_number} {raiders} OF @{raider_channel}"
         ],
         "100": [
-            " WELCOME TO THE CREW {raiders_number:,} {raiders} OF @{raider_channel} "
+            "WELCOME TO THE CREW {raiders_number:,} {raiders} OF @{raider_channel}"
         ]
     },
     "subs_gift": {
@@ -140,14 +151,14 @@ MESSAGES = {
 }
 STREAM_WARMUP = 600
 
+# ----------------- VARIABLES  ----------------- #
+log_list = []
+
 # ----------------- FILES  ----------------- #
 AUTH_JSON = DIRECTORIES['auth'] / "auth_info.json"
 FILENAME_DATA_STREAM = f"{CHAT_ROOM[0]}.json"
 FILENAME_VIEWERS = f"{CHAT_ROOM[0]}.json"
 TWITCH_TOKEN = DIRECTORIES['auth'] / "twitch_token.json"
-
-# ----------------- VARIABLES  ----------------- #
-log_list = []
 
 
 # ----------------- CLASS SETUP ----------------- #
@@ -196,8 +207,7 @@ class DictOptions:
 class ListOptions:
     __slots__ = ("mode", "sep", "maxsplit", "cast_map")
 
-    def __init__(
-        self,
+    def __init__(self,
         mode: Literal["split", "splitlines", "none"] = "none",
         sep: str = "",
         maxsplit: int = -1,
@@ -626,13 +636,12 @@ def update_viewers_avg():
     time_started_timestamp = strptime(data_stream['info']['time']['started']).timestamp()
     if now_time.timestamp() - strptime(data_stream['info']['time']['started']).timestamp() < STREAM_WARMUP:
         append_time = datetime.fromtimestamp(time_started_timestamp + STREAM_WARMUP)
-        logger_whisper.info(f"{fortime()}: append_time/viewers; {append_time.strftime(FORMAT_TIME)}/{viewers}")
     else:
         append_time = now_time
     data_stream['viewers'].append((append_time.strftime(FORMAT_TIME), viewers))
 
 
-# ----------------- MAIN BOT FUNCTIONS ----------------- #
+# ----------------- MAIN FUNCTIONS ----------------- #
 async def on_message(msg: ChatMessage) -> None:
     try:
         if msg.user.name in BOT_NAMES:
@@ -707,8 +716,11 @@ async def on_raid(event: dict) -> None:
         data_stream['data']['raids']['total'] += 1
         data_stream['data']['raids']['viewers'] += raiders_number
         key = define_key(list(MESSAGES['raids'].keys()), raiders_number)
-        response: str = random.choice(MESSAGES['raids'][key])
-        logger_sim.info(response.format(raider_channel=raider_channel, raiders_number=raiders_number, raiders="RAIDERS" if raiders_number > 1 else "RAIDER"))
+        response: str = random.choice(MESSAGES['raids'][key]).format(raider_channel=raider_channel, raiders_number=raiders_number,
+                                                                     raiders="RAIDERS" if raiders_number > 1 else "RAIDER")
+        emotes = random.choice(EMOTES_MESSAGES['raids'])
+        full_response = f"{" ".join(emotes)} {response} {" ".join(reversed(emotes))}"
+        logger_sim.info(full_response)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_raid' - {_error}")
         return
@@ -777,7 +789,6 @@ async def on_user_join(event: JoinEvent) -> None:
             bot.viewers['in_chat'][streamer_name].append(chatter_name)
             logger_viewers.info(f"{fortime()}: {chatter_name} has joined the chat! {fetch_viewers_current():,} viewers present!")
             update_viewers_avg()
-            # update_viewers(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_join' - {_error}")
         return
@@ -793,18 +804,8 @@ async def on_user_left(event: LeftEvent) -> None:
             bot.viewers['in_chat'][streamer_name].remove(chatter_name)
             logger_viewers.info(f"{fortime()}: {event.user_name} has left the chat! {fetch_viewers_current():,} viewers present!")
             update_viewers_avg()
-            # update_viewers(data_stream)
     except Exception as _error:
         logger.error(f"{fortime()}: ERROR 'on_user_left' - {_error}")
-        return
-
-
-# async def on_whisper(event: WhisperEvent) -> None:
-async def on_whisper() -> None:
-    try:
-        return
-    except Exception as _error:
-        logger.error(f"{fortime()}: ERROR 'on_whisper' - {_error}")
         return
 
 
@@ -830,7 +831,7 @@ async def run() -> None:
     chat.register_event(ChatEvent.SUB, on_sub)
     chat.register_event(ChatEvent.RAID, on_raid)
     chat.register_event(ChatEvent.NOTICE, on_notice)
-    chat.register_event(ChatEvent.WHISPER, on_whisper)
+    # chat.register_event(ChatEvent.WHISPER, on_whisper)
     chat.register_event(ChatEvent.JOIN, on_user_join)
     chat.register_event(ChatEvent.USER_LEFT, on_user_left)
     chat.start()

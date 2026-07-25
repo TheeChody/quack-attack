@@ -248,8 +248,9 @@ async def auth_bot() -> None:
 def bar_bottom() -> str:
     try:
         dashes = len(bot.long_dashes())
-        dashes_integer = True
-        if not (dashes / 2).is_integer():
+        if (dashes / 2).is_integer():
+            dashes_integer = True
+        else:
             dashes_integer = False
             dashes -= 1
         _time_now = datetime.now().timestamp()
@@ -268,8 +269,9 @@ def bar_bottom() -> str:
 def bar_top() -> str:
     try:
         dashes = len(bot.long_dashes())
-        dashes_integer = True
-        if not (dashes / 2).is_integer():
+        if (dashes / 2).is_integer():
+            dashes_integer = True
+        else:
             dashes_integer = False
         _time_str = datetime.now().strftime(f'%I:%M:%S{'' if dashes_integer else ' '}%p').upper()
         try:
